@@ -2,6 +2,9 @@
 
 Simple Template Based Web for Clojure.
 
+## Comment
+This is my first Clojure project. Any suggestion will be welcomed.
+
 ## Usage
 
 FIXME: write

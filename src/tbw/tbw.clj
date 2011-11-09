@@ -1,46 +1,64 @@
-(use 'ring.adapter.jetty)
-(use 'ring.middleware.cookies)
+;;;;   -*- Mode: clojure; encoding: utf-8; -*-
+;;
+;; Copyright (C) 2011 Jong-won Choi
+;; All rights reserved.
+;; Distributed under the BSD-style license:
+;; http://www.opensource.org/licenses/bsd-license.php
+;;
+;;;; Commentary:
+;;
+;;
+;;
+;;;; Code:
 
-(def *counter* (atom 0))
+(ns tbw.tbw
+  (:import [java.io :only []]))
 
-(defn test-app [req]
-  (println req)
-  {:status  200
-   :headers {"Content-Type" "text/html"}
-   :body    (str "Hello World from Ring" (swap! *counter* inc))})
+(defrecord TemplateBasedWebSite [script->html-template site-prefix home-page-url site-dispatchers common-template-var-fn])
 
-(defonce server (run-jetty #'test-app {:port 8080 :join? false}))
+(def tbw-sites {})
 
-;;(.stop server)
-;;(.start server)
+(defn make-tbw-site [& {:keys [site-prefix home-page-url site-dispatchers common-template-var-fn]
+                        :or {site-prefix "FIXME"}}]
+  {:pre [(identity home-page-url) (identity site-dispatchers)]}
+  (let [
+  (TemplateBasedWebSite. {} ;; script->html-template
+                         site-prefix
+                         ))
 
-(def-tbws test-site ()
+(defmacro def-tbw [site-name [prefix]
+                   & {:keys [site-home site-dispatchers html-page-defs
+                             default-page-url template]}]
+  `(do
+     ;; define dispatcher
+     (defn ~site-name []
+       ;; return html page based on "site-name + script-name"
+       )
+     ;; update global record table
+     ;; E.g. remove existing one, put new one
+  ))
+
+(def-tbw ex-website [] ;; or ("prefix"). For example ("subdomain")
   :site-home "~/Works/defstruct/"
-  :site-pathnames ("DEFSTRUCT" (("HTML;**;*.*"      ("html" "**"))
-				("NAME-BADGE-HTML;**;*.*"      ("name-badge-html" "**"))
-				("JS;**;*.*"	    ("js" "**"))
-				("YUI;**;*.*"	    ("yui" "**"))
-				("CSS;**;*.*"       ("css" "**"))
-				("IMG;**;*.*"       ("img" "**"))
-				("ETC;**;*.*"       ("etc" "**"))))
-  :site-dispatchers (("/css/"		:folder		"DEFSTRUCT:CSS;")
-		     ("/img/"		:folder		"DEFSTRUCT:IMG;")
-		     ("/js/"		:folder		"DEFSTRUCT:JS;")
-		     ("/yui/"		:folder		"DEFSTRUCT:YUI;")
-		     ("/favicon.ico"	:file		"DEFSTRUCT:IMG;favicon.ico")
-		     ;;("^/process-contact.html$" :regex   process-contact.html)
-		     ("/robots.txt"	:file		"DEFSTRUCT:ETC;robots.txt")
-		     ;;("^/"		:regex		defstruct-site)
-		     )
-  :html-page-defs (("/home.html"	defstruct-home-menu-vars)
-		   ("/services.html"	defstruct-services-menu-vars)
-		   ("/examples.html"	defstruct-examples-menu-vars)
-		   ("/about.html"	defstruct-about-menu-vars)
-		   ("/contact.html"	defstruct-contact-menu-vars)
-		   ("/about-jongwon.html" defstruct-about-menu-vars)
-		   ("/thanks.html" defstruct-contact-menu-vars))
-    :home-page-url "/home.html"
-    :template (:folder "DEFSTRUCT:HTML;"
-	       :top-template "defstruct-template.html"
-	       :content-marker "<!-- TMPL_VAR content -->"
-	       :template-var-fn defstruct-template-vars))
+  ;; :site-home "~/Works/defstruct/" ;; if not given, use current working dir
+  :site-dispatchers {"/css/"            {:folder "css/"}
+		     "/img/"		{:folder "img/"}
+		     "/js/"		{:folder "js/"}
+		     "/yui/"		{:folder "yui/"}
+		     "/favicon.ico"	{:file   "img/favicon.ico"}
+                     "/robots.txt"	{:file	 "etc/robots.txt"}
+		     }
+  :html-page-defs {"/home.html"         ex-home-menu-vars
+		   "/services.html"	ex-services-menu-vars
+		   "/examples.html"	ex-examples-menu-vars
+		   "/about.html"	ex-about-menu-vars
+		   "/contact.html"	ex-contact-menu-vars
+		   "/thanks.html"       ex-contact-menu-vars}
+  :default-page-url "/home.html"
+  :template {;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
+	     :top-template "defstruct-template.html"
+             :content-marker "<!-- TMPL_VAR content -->"
+             :template-var-fn ex-template-vars})
+
+
+;;; TBW.CLJ ends here
