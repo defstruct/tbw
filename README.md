@@ -5,6 +5,11 @@ Simple Template Based Web for Clojure.
 ## Comment
 This is my first Clojure project. Any suggestion will be welcomed.
 
+## Idea
+Define a site using declarative style.
+Web pages of the same website usually has the same style and to acheive this just use template html files.
+A website is defined by a subdomain or uri prefix using regex.
+
 ## Usage
 
 FIXME: write
