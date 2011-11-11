@@ -12,7 +12,10 @@
 ;;;; Code:
 
 (ns tbw.core
-  (:use [ring.adapter.jetty :only [run-jetty]])
+  (:use [ring.adapter.jetty :only [run-jetty]]
+;;        [clojure.string :only [subs]]
+        [clojure.contrib.seq :only [positions]])
+
   ;;(:import [java.io :only []]))
   )
 
@@ -40,14 +43,76 @@
 ;; Populate request readers
 (define-request-readers)
 
+;; Global mapping used in top level dispatcher
+
+(def tbw-sites (ref []))
+
+(defrecord TemplateBasedWebSite [script->html-template uri-prefix home-page-uri resource-dispatchers common-template-var-fn])
+
+(defn- make-tbw-site [& {:keys [site-dispatcher uri-prefix site-home home-page-uri resource-dispatchers common-template-var-fn]
+                         :or {uri-prefix "/"}}]
+  {:pre [(identity home-page-uri) (identity resource-dispatchers) (and (= (get uri-prefix 0) \/)
+                                                                       (not (= (get uri-prefix (dec (count uri-prefix)))
+                                                                               \/)))]}
+  (let [new-site (TemplateBasedWebSite. {} ;; script->html-template
+                                        uri-prefix
+                                        home-page-uri
+                                        resource-dispatchers
+                                        common-template-var-fn)]
+
+
+    new-site))
+
+;; FIXME: move unless macro to proper place
+(defmacro unless [pred & body]
+  `(when ~pred
+     ~@body))
+
+(defn- update-tbw-sites! [site-obj]
+  (let [new-uri-prefix (:uri-prefix site-obj)
+        existing-pos (take 1 (positions #(= (:uri-prefix %) new-uri-prefix) @tbw-sites))]
+    (if (integer? existing-pos)
+      (do
+        ;; FIXME: warn!
+        (dosync (alter tbw-sites assoc existing-pos site-obj)))
+      (dosync
+       (alter tbw-sites conj site-obj)))))
+
+(defmacro def-tbw [site-name [& {:keys [uri-prefix]}]
+                   & {:keys [site-home resource-dispatchers html-page-defs
+                             home-page-uri template common-template-var-fn]}]
+  {:pre [site-home resource-dispatchers html-page-defs
+         home-page-uri template ;;common-template-var-fn
+         ]}
+  `(do
+     (update-tbw-sites! (make-tbw-site :site-dispatcher (fn []
+                                                          ;; return html page based on "url-prefix + script-name"
+                                                          "FIXME")
+                                       :uri-prefix ~uri-prefix
+                                       :site-home ~site-home
+                                       :home-page-uri ~home-page-uri
+                                       :resource-dispatchers ~resource-dispatchers
+                                       :common-template-var-fn ~common-template-var-fn))))
+
+
+
+
 (defn- top-level-dispatcher [request]
   (binding [*request* request]
-    (println `(server-name ~(server-name*) uri ~(uri*)))
-    {:Status  200
-     :headers {"Content-Type" "text/plain"}
-     :body    "FIXME"}))
-
-
+;;    (print *request*)
+    (let [uri (uri*)
+          uri-prefix (apply subs uri (take 2 (positions #(= % \/) uri)))
+          site (take 1 (filter (fn [site-def]
+                                 (= (:uri-prefix site-def) uri-prefix))
+                               @tbw-sites))]
+      (println `(~uri-prefix ~site))
+      (if (empty? site)
+        {:Status  400
+         :headers {"Content-Type" "text/plain"}
+         :body    "Oops"}
+        {:Status  200
+         :headers {"Content-Type" "text/plain"}
+         :body    "FIXME"}))))
 
 ;; FIXME - temporary setup
 ;; (defn- top-level-dispatcher [request]
@@ -69,58 +134,13 @@
     ;;   (finally (.stop server)))))
 ;; FIXME end
 
-
-;; Global mapping used in top level dispatcher
-
-(def tbw-sites (ref {}))
-
-(defrecord TemplateBasedWebSite [script->html-template site-prefix home-page-uri resource-dispatchers common-template-var-fn])
-
-(defn- make-tbw-site [site-name & {:keys [site-prefix home-page-uri resource-dispatchers common-template-var-fn]
-                                  :or {site-prefix "FIXME"}}]
-  {:pre [(identity home-page-uri) (identity resource-dispatchers)]}
-  (let [new-site (TemplateBasedWebSite. {} ;; script->html-template
-                                        site-prefix
-                                         home-page-uri
-                                         resource-dispatchers
-                                         common-template-var-fn)]
-
-
-    new-site))
-
-(defn- update-tbw-sites! [site-name site-obj]
-  (let [existing-def (get @tbw-sites site-name)]
-    (when existing-def
-      ;; FIXME: warn!
-      )
-    (dosync
-     (alter tbw-sites assoc site-name site-obj))))
-
-(defmacro def-tbw [site-name [& {:keys [uri-prefix subdomain]}]
-                   & {:keys [site-home resource-dispatchers html-page-defs
-                             home-page-uri template]}]
-
-  `(do
-     ;; define site specific dispatcher
-     (defn ~site-name []
-       ;; return html page based on "url-prefix/subdomain + script-name"
-       "FIXME"
-       )
-     (update-tbw-sites! site-name (make-tbw-site :site-prefix (or subdomain uri-prefix)
-                                                 :site-home site-home
-                                                 :home-page-uri home-page-uri
-                                                 :resource-dispatchers resource-dispatchers
-
-
-  ))
-
-(def-tbw ex-website [] ;; or ("prefix"). For example ("subdomain")
+(def-tbw ex-website [:uri-prefix "/abc"]
   :site-home "~/Works/defstruct/"
   ;; :site-home "~/Works/defstruct/" ;; if not given, use current working dir
-  :resource-dispatchers {"/css/"            {:folder "css/"}
-                         "/img/"		{:folder "img/"}
+  :resource-dispatchers {"/css/"        {:folder "css/"}
+                         "/img/"	{:folder "img/"}
                          "/js/"		{:folder "js/"}
-                         "/yui/"		{:folder "yui/"}
+                         "/yui/"	{:folder "yui/"}
                          "/favicon.ico"	{:file   "img/favicon.ico"}
                          "/robots.txt"	{:file	 "etc/robots.txt"}
                          }
@@ -131,7 +151,7 @@
 		   "/contact.html"	ex-contact-menu-vars
 		   "/thanks.html"       ex-contact-menu-vars}
   :home-page-uri "/home.html"
-  :template {;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
+  :template { ;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
 	     :top-template "defstruct-template.html"
              :content-marker "<!-- TMPL_VAR content -->"
              :template-var-fn ex-template-vars})
