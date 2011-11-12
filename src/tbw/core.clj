@@ -71,24 +71,23 @@
     )
   {:body file})
 
-(defn- handle-folder [file]
-  )
-
 (defn- create-static-file-dispatcher [prefix file]
   (let [regex (Pattern/compile (str prefix "$"))]
     #(when (re-find regex (uri*))
        (fn [] (handle-static-file file)))))
 
 (defn- create-folder-dispatcher [prefix file]
-  (let [regex (Pattern/compile (str "^" prefix))]
-    ;; FIXME: first get dispatch then when its handler returns something stop
-    ;; otherwise keep calling next hanlders.
-    #(when (re-find regex (uri*))
-       (fn [] (handle-folder file)))))
+  (let [regex   (Pattern/compile (str "^" prefix))]
+    #(let [uri (uri*)
+           matcher (.matcher regex uri)]
+       ;;(println `(:uri ~uri :regex ~regex))
+       (when (.find matcher)
+         ;;(println `(:got2 ,(subs uri (.end matcher))))
+         (fn [] (handle-static-file (File. file (subs uri (.end matcher)))))))))
 
 (defn- update-tbw-sites! [site-obj]
   (let [new-uri-prefix (:uri-prefix site-obj)
-        existing-pos (take 1 (positions #(= (:uri-prefix %) new-uri-prefix) @tbw-sites))]
+        [existing-pos] (take 1 (positions #(= (:uri-prefix %) new-uri-prefix) @tbw-sites))]
     (if (integer? existing-pos)
       (do
         ;; FIXME: warn!
@@ -119,18 +118,28 @@
 (defn- make-site-dispatchers [resource-dispatchers html-page-defs home-page-uri]
   (conj (make-resource-dispatchers resource-dispatchers) (make-html-dispatcher html-page-defs)))
 
+(defn- canonicalize-resource-dispatchers "Build sorted and prefixed resource dispatcher defs."
+  [prefix resource-dispatchers]
+  (loop [defs resource-dispatchers file-defs [] folder-defs []]
+    (let [[key val] (first defs)]
+      (cond (empty? key) (into {} `(~@(sort file-defs) ~@(sort folder-defs)))
+            (= (:type val) :file) (recur (next defs) (conj file-defs [key val]) folder-defs)
+            (= (:type val) :folder) (recur (next defs) file-defs (conj folder-defs [(str prefix key) val]))
+            :else (throw (Exception. (str "Unknown resource type: " (:type val))))))))
+
 (defmacro def-tbw [site-name [& {:keys [uri-prefix]}]
                    & {:keys [resource-dispatchers html-page-defs
                              home-page-uri template common-template-var-fn]}]
   {:pre [resource-dispatchers html-page-defs
          home-page-uri template ;;common-template-var-fn
          ]}
-  `(do
-     (update-tbw-sites! (make-tbw-site :uri-prefix ~uri-prefix
-                                       :home-page-uri ~home-page-uri
-                                       ;; FIXME: make-site-dispatchers
-                                       :site-dispatchers (make-site-dispatchers ~resource-dispatchers ~html-page-defs ~home-page-uri)
-                                       :common-template-var-fn ~common-template-var-fn))))
+  (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)]
+    `(do
+       (update-tbw-sites! (make-tbw-site :uri-prefix ~uri-prefix
+                                         :home-page-uri ~home-page-uri
+                                         ;; FIXME: make-site-dispatchers
+                                         :site-dispatchers (make-site-dispatchers ~resource-dispatchers ~html-page-defs ~home-page-uri)
+                                         :common-template-var-fn ~common-template-var-fn)))))
 
 (defn- default-handler []
   ;; FIXME: logging
