@@ -137,7 +137,6 @@
     `(do
        (update-tbw-sites! (make-tbw-site :uri-prefix ~uri-prefix
                                          :home-page-uri ~home-page-uri
-                                         ;; FIXME: make-site-dispatchers
                                          :site-dispatchers (make-site-dispatchers ~resource-dispatchers ~html-page-defs ~home-page-uri)
                                          :common-template-var-fn ~common-template-var-fn)))))
 
@@ -147,7 +146,6 @@
    :headers {"Content-Type" "text/html; charset=utf-8"}
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
-;; FIXME: site-dispatchers are sorted and the last one is the default handler
 (defn- call-request-handlers [site]
   (loop [[dispatcher & rest] (:site-dispatchers site)]
 ;;    (println `(:call-request-handlers ~dispatcher))
