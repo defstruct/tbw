@@ -16,7 +16,23 @@
 ;;        [clojure.string :only [subs]]
         [clojure.contrib.seq :only [positions]])
   (:import [java.io File]
-           [java.util.regex Pattern]))
+           [java.util.regex Pattern]
+           [java.util Date]
+           [java.util TimeZone]
+           [java.text SimpleDateFormat]))
+
+;; FIXME: start a utility file?
+(defmacro ignore-errors [& forms]
+  `(try (do ~@forms)
+        (catch java.lang.Exception _# nil)))
+
+(def gmt-date-format (doto (SimpleDateFormat. "E, dd MMM yyyy HH:mm:ss z")
+                       (.setTimeZone (TimeZone/getTimeZone "GMT+0:0"))))
+
+(defn rfc-1123-date
+  ([] (rfc-1123-date (Date.)))
+  ([^Date date]
+     (.format gmt-date-format date)))
 
 ;; Special variable and functions for the request
 (def ^{:dynamic true} *request*)
@@ -64,12 +80,15 @@
 ;; FIXME: New file for dispatchers?
 ;; Dispatchers - stealing from Hunchentoot
 ;;
-(defn- handle-static-file [file]
-  (let [last-modified (.lastModified file)]
-    ;; set content type ??
-    ;; handle-if-modified-sincne
-    )
-  {:body file})
+(def http-not-modified 304)
+(def http-bad-request 400)
+
+(defn- handle-static-file [^File file]
+  (let [last-modified (rfc-1123-date (Date. (.lastModified file)))]
+    (if (= (get (headers*) "if-modified-since") last-modified)
+      {:status http-not-modified}
+      {:body file
+       :headers {"last-modified" (rfc-1123-date (Date. last-modified))}})))
 
 (defn- create-static-file-dispatcher [prefix file]
   (let [regex (Pattern/compile (str prefix "$"))]
@@ -142,7 +161,7 @@
 
 (defn- default-handler []
   ;; FIXME: logging
-  {:Status 400
+  {:status http-bad-request
    :headers {"Content-Type" "text/html; charset=utf-8"}
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
@@ -151,7 +170,7 @@
 ;;    (println `(:call-request-handlers ~dispatcher))
     (if dispatcher
       (if-let [handler (dispatcher)]
-        (if-let [response (handler)]
+        (if-let [response (ignore-errors (handler))]
           response
           (recur rest))
         (recur rest))
