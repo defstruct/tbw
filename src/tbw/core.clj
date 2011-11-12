@@ -26,13 +26,13 @@
   `(try (do ~@forms)
         (catch java.lang.Exception _# nil)))
 
-(def gmt-date-format (doto (SimpleDateFormat. "E, dd MMM yyyy HH:mm:ss z")
+(def rfc-1123-date-format (doto (SimpleDateFormat. "E, dd MMM yyyy HH:mm:ss z")
                        (.setTimeZone (TimeZone/getTimeZone "GMT+0:0"))))
 
 (defn rfc-1123-date
   ([] (rfc-1123-date (Date.)))
   ([^Date date]
-     (.format gmt-date-format date)))
+     (.format rfc-1123-date-format date)))
 
 ;; Special variable and functions for the request
 (def ^{:dynamic true} *request*)
