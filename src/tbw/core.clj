@@ -27,7 +27,7 @@
         (catch java.lang.Exception _# nil)))
 
 (def rfc-1123-date-format (doto (SimpleDateFormat. "E, dd MMM yyyy HH:mm:ss z")
-                       (.setTimeZone (TimeZone/getTimeZone "GMT+0:0"))))
+                            (.setTimeZone (TimeZone/getTimeZone "GMT+0:0"))))
 
 (defn rfc-1123-date
   ([] (rfc-1123-date (Date.)))
@@ -44,9 +44,9 @@
 
 (defn- request-reader*-form [key]
   (let [fn-name (symbol (str (name key) "*"))]
-  `(defn ~fn-name
-        ([] (~fn-name *request*))
-        ([~'request] (~key ~'request)))))
+    `(defn ~fn-name
+       ([] (~fn-name *request*))
+       ([~'request] (~key ~'request)))))
 
 (defmacro define-request-readers
   "Define <reader>* functions. When a reader called without any argument, dynamic variable *request* will be used."
@@ -61,16 +61,16 @@
 ;; Global mapping used in handle-request
 (def tbw-sites (ref []))
 
-(defrecord TemplateBasedWebSite [script->html-template uri-prefix home-page-uri site-dispatchers common-template-var-fn])
+(defrecord TemplateBasedWebSite [script->html-template uri-prefix default-html-page site-dispatchers common-template-var-fn])
 
-(defn- make-tbw-site [& {:keys [uri-prefix home-page-uri site-dispatchers common-template-var-fn]
+(defn- make-tbw-site [& {:keys [script->html-template uri-prefix default-html-page site-dispatchers common-template-var-fn]
                          :or {uri-prefix "/"}}]
-  {:pre [(identity home-page-uri) (identity site-dispatchers) (and (= (get uri-prefix 0) \/)
+  {:pre [(identity script->html-template) (identity default-html-page) (identity site-dispatchers) (and (= (get uri-prefix 0) \/)
                                                                        (not (= (get uri-prefix (dec (count uri-prefix)))
                                                                                \/)))]}
-  (let [new-site (TemplateBasedWebSite. {} ;; script->html-template
+  (let [new-site (TemplateBasedWebSite. script->html-template
                                         uri-prefix
-                                        home-page-uri
+                                        default-html-page
                                         site-dispatchers
                                         common-template-var-fn)]
 
@@ -131,12 +131,6 @@
                     (create-folder-dispatcher prefix file))))
               resource-dispatchers))))
 
-(defn- make-html-dispatcher [html-page-defs]
-  )
-
-(defn- make-site-dispatchers [resource-dispatchers html-page-defs home-page-uri]
-  (conj (make-resource-dispatchers resource-dispatchers) (make-html-dispatcher html-page-defs)))
-
 (defn- canonicalize-resource-dispatchers "Build sorted and prefixed resource dispatcher defs."
   [prefix resource-dispatchers]
   (loop [defs resource-dispatchers file-defs [] folder-defs []]
@@ -147,16 +141,18 @@
             :else (throw (Exception. (str "Unknown resource type: " (:type val))))))))
 
 (defmacro def-tbw [site-name [& {:keys [uri-prefix]}]
-                   & {:keys [resource-dispatchers html-page-defs
-                             home-page-uri template common-template-var-fn]}]
-  {:pre [resource-dispatchers html-page-defs
-         home-page-uri template ;;common-template-var-fn
+                   & {:keys [resource-dispatchers html-page-dispatchers
+                             default-html-page template common-template-var-fn]}]
+  {:pre [resource-dispatchers html-page-dispatchers
+         default-html-page template ;;common-template-var-fn
          ]}
-  (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)]
+  (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)
+        html-page-dispatchers (into {} (map (fn [[k v]] [(str uri-prefix k) v]) html-page-dispatchers))]
     `(do
-       (update-tbw-sites! (make-tbw-site :uri-prefix ~uri-prefix
-                                         :home-page-uri ~home-page-uri
-                                         :site-dispatchers (make-site-dispatchers ~resource-dispatchers ~html-page-defs ~home-page-uri)
+       (update-tbw-sites! (make-tbw-site :script->html-template ~html-page-dispatchers
+                                         :uri-prefix ~uri-prefix
+                                         :default-html-page ~default-html-page
+                                         :site-dispatchers (make-resource-dispatchers ~resource-dispatchers)
                                          :common-template-var-fn ~common-template-var-fn)))))
 
 (defn- default-handler []
@@ -230,13 +226,13 @@
                          "/favicon.ico" {:type :file   :path "img/favicon.ico"}
                          "/robots.txt"  {:type :file   :path "etc/robots.txt"}
                          }
-  :html-page-defs {"/home.html"         ex-home-menu-vars
-		   "/services.html"	ex-services-menu-vars
-		   "/examples.html"	ex-examples-menu-vars
-		   "/about.html"	ex-about-menu-vars
-		   "/contact.html"	ex-contact-menu-vars
-		   "/thanks.html"       ex-contact-menu-vars}
-  :home-page-uri "/home.html"
+  :html-page-dispatchers {"/home.html"          ex-home-menu-vars
+                          "/services.html"	ex-services-menu-vars
+                          "/examples.html"	ex-examples-menu-vars
+                          "/about.html"         ex-about-menu-vars
+                          "/contact.html"	ex-contact-menu-vars
+                          "/thanks.html"        ex-contact-menu-vars}
+  :default-html-page    "/home.html"
   :template { ;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
 	     :top-template "defstruct-template.html"
              :content-marker "<!-- TMPL_VAR content -->"

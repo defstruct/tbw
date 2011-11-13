@@ -11,24 +11,22 @@
 ;;
 ;;;; Code:
 
-(def-tbw ex-website (a) ;; or ("prefix"). For example ("subdomain")
-  :site-home "~/Works/defstruct/"
-  ;; :site-home "~/Works/defstruct/" ;; if not given, use current working dir
-  :site-dispatchers {"/css/"            {:folder "css/"}
-		     "/img/"		{:folder "img/"}
-		     "/js/"		{:folder "js/"}
-		     "/yui/"		{:folder "yui/"}
-		     "/favicon.ico"	{:file   "img/favicon.ico"}
-                     "/robots.txt"	{:file	 "etc/robots.txt"}
-		     }
-  :html-page-defs {"/home.html"         ex-home-menu-vars
-		   "/services.html"	ex-services-menu-vars
-		   "/examples.html"	ex-examples-menu-vars
-		   "/about.html"	ex-about-menu-vars
-		   "/contact.html"	ex-contact-menu-vars
-		   "/thanks.html"       ex-contact-menu-vars}
-  :default-page-url "/home.html"
-  :template {;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
+(def-tbw ex-website [:uri-prefix "/abc"]
+  :resource-dispatchers {"/css/"        {:type :folder :path "css"}
+                         "/img/"        {:type :folder :path "img"}
+                         "/js/"         {:type :folder :path "js"}
+                         "/yui/"        {:type :folder :path "yui"}
+                         "/favicon.ico" {:type :file   :path "img/favicon.ico"}
+                         "/robots.txt"  {:type :file   :path "etc/robots.txt"}
+                         }
+  :html-page-dispatchers {"/home.html"          ex-home-menu-vars
+                          "/services.html"	ex-services-menu-vars
+                          "/examples.html"	ex-examples-menu-vars
+                          "/about.html"         ex-about-menu-vars
+                          "/contact.html"	ex-contact-menu-vars
+                          "/thanks.html"        ex-contact-menu-vars}
+  :default-html-page    "/home.html"
+  :template { ;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
 	     :top-template "defstruct-template.html"
              :content-marker "<!-- TMPL_VAR content -->"
              :template-var-fn ex-template-vars})
