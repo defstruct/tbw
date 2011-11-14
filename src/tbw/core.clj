@@ -161,29 +161,35 @@
    :headers {"Content-Type" "text/html; charset=utf-8"}
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
-(defn- call-request-handlers [site]
-  (loop [[dispatcher & rest] (:site-dispatchers site)]
-;;    (println `(:call-request-handlers ~dispatcher))
-    (if dispatcher
-      (if-let [handler (dispatcher)]
-        (if-let [response (ignore-errors (handler))]
-          response
+(defn- run-html-dispatcher [html-dispatcher]
+  {:body "FIXME: html-dispatcher"})
+
+(defn- call-request-handlers [site script-name]
+  (println :call-request-handlers)
+  (if-let [html-dispatcher (get (:script->html-template site) script-name)]
+    (run-html-dispatcher html-dispatcher)
+    (loop [[dispatcher & rest] (:site-dispatchers site)]
+      ;;    (println `(:call-request-handlers ~dispatcher))
+      (if dispatcher
+        (if-let [handler (dispatcher)]
+          (if-let [response (ignore-errors (handler))]
+            response
+            (recur rest))
           (recur rest))
-        (recur rest))
-      (default-handler))))
+        (default-handler)))))
 
 (defn- handle-request [request]
   (binding [*request* request]
     (let [uri (uri*)
           uri-prefix (apply subs uri (take 2 (positions #(= % \/) uri)))
           [site] (take 1 (filter (fn [site-def]
-                                 (= (:uri-prefix site-def) uri-prefix))
-                               @tbw-sites))]
+                                   (= (:uri-prefix site-def) uri-prefix))
+                                 @tbw-sites))]
 ;;      (println `(:site ~site :empty? ~(empty? site) :uri-prefix ,uri-prefix))
       (if (empty? site)
         ;; call default handler
         (default-handler)
-        (call-request-handlers site)))))
+        (call-request-handlers site uri)))))
 
 ;; FIXME - temporary setup
 ;; (defn- handle-request [request]
