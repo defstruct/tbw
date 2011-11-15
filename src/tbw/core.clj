@@ -5,6 +5,30 @@
 ;; Distributed under the BSD-style license:
 ;; http://www.opensource.org/licenses/bsd-license.php
 ;;
+;; Redistribution and use in source and binary forms, with or without
+;; modification, are permitted provided that the following conditions
+;; are met:
+
+;;   * Redistributions of source code must retain the above copyright
+;;     notice, this list of conditions and the following disclaimer.
+
+;;   * Redistributions in binary form must reproduce the above
+;;     copyright notice, this list of conditions and the following
+;;     disclaimer in the documentation and/or other materials
+;;     provided with the distribution.
+
+;; THIS SOFTWARE IS PROVIDED BY THE AUTHOR 'AS IS' AND ANY EXPRESSED
+;; OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+;; WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+;; ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+;; DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+;; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+;; GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+;; INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+;; WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+;; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+;; SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+;;
 ;;;; Commentary:
 ;;
 ;;
@@ -13,7 +37,8 @@
 
 (ns tbw.core
   (:use [ring.adapter.jetty :only [run-jetty]]
-;;        [clojure.string :only [subs]]
+        ;;[clojure.string :only [ltrim]]
+        [clojure.contrib.string :only [ltrim]]
         [clojure.contrib.seq :only [positions]])
   (:import [java.io File]
            [java.util.regex Pattern]
@@ -25,6 +50,9 @@
 (defmacro ignore-errors [& forms]
   `(try (do ~@forms)
         (catch java.lang.Exception _# nil)))
+
+(defn error [& args]
+  (throw (Exception. (apply str args))))
 
 (def rfc-1123-date-format (doto (SimpleDateFormat. "E, dd MMM yyyy HH:mm:ss z")
                             (.setTimeZone (TimeZone/getTimeZone "GMT+0:0"))))
@@ -124,7 +152,7 @@
                       file? (= type :file)
                       file (cond (.exists file1) file1
                                  (.exists file2) file2
-                                 :else (throw (Exception. (str "Expected " (name type) " not found: " file1 " or " file2))))]
+                                 :else (error "Expected " (name type) " not found: " file1 " or " file2))]
                   (assert (=  (.isFile file) file?))
                   (if file?
                     (create-static-file-dispatcher prefix file)
@@ -136,9 +164,15 @@
   (loop [defs resource-dispatchers file-defs [] folder-defs []]
     (let [[key val] (first defs)]
       (cond (empty? key) (into {} `(~@(sort file-defs) ~@(sort folder-defs)))
-            (= (:type val) :file) (recur (next defs) (conj file-defs [key val]) folder-defs)
-            (= (:type val) :folder) (recur (next defs) file-defs (conj folder-defs [(str prefix key) val]))
-            :else (throw (Exception. (str "Unknown resource type: " (:type val))))))))
+            (= (:type val) :file) (recur (rest defs) (conj file-defs [key val]) folder-defs)
+            (= (:type val) :folder) (recur (rest defs) file-defs (conj folder-defs [(str prefix key) val]))
+            :else (error "Unknown resource type: " (:type val))))))
+
+(defn- canonicalize-html-dispatchers [uri-prefix html-page-dispatchers template]
+  (into {} (map (fn [[k v]]
+                  ;; FIXME: template must be html
+                  [(str uri-prefix k) {:var-function v :template template}])
+                html-page-dispatchers)))
 
 (defmacro def-tbw [site-name [& {:keys [uri-prefix]}]
                    & {:keys [resource-dispatchers html-page-dispatchers
@@ -147,7 +181,7 @@
          default-html-page template ;;common-template-var-fn
          ]}
   (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)
-        html-page-dispatchers (into {} (map (fn [[k v]] [(str uri-prefix k) v]) html-page-dispatchers))]
+        html-page-dispatchers (canonicalize-html-dispatchers uri-prefix html-page-dispatchers template)]
     `(do
        (update-tbw-sites! (make-tbw-site :script->html-template ~html-page-dispatchers
                                          :uri-prefix ~uri-prefix
@@ -161,13 +195,14 @@
    :headers {"Content-Type" "text/html; charset=utf-8"}
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
-(defn- run-html-dispatcher [html-dispatcher]
+(defn- run-html-dispatcher [html-dispatcher site]
+  ;; FIXME: Get and use compiled/cached html from site
   {:body "FIXME: html-dispatcher"})
 
 (defn- call-request-handlers [site script-name]
   (println :call-request-handlers)
   (if-let [html-dispatcher (get (:script->html-template site) script-name)]
-    (run-html-dispatcher html-dispatcher)
+    (run-html-dispatcher html-dispatcher site)
     (loop [[dispatcher & rest] (:site-dispatchers site)]
       ;;    (println `(:call-request-handlers ~dispatcher))
       (if dispatcher
@@ -243,6 +278,5 @@
 	     :top-template "defstruct-template.html"
              :content-marker "<!-- TMPL_VAR content -->"
              :template-var-fn ex-template-vars})
-
 
 ;;; CORE.CLJ ends here
