@@ -10,6 +10,8 @@ Define a site using declarative style.
 Web pages of the same website usually has the same style and to acheive this just use template html files.
 A website is defined by a unique uri prefix.
 
+The template idea from HTML-TEMPLATE written by Edi Weitz.
+
 ## Usage
 
 FIXME: write
