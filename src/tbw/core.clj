@@ -37,30 +37,10 @@
 
 (ns tbw.core
   (:use [ring.adapter.jetty :only [run-jetty]]
-        ;;[clojure.string :only [ltrim]]
-        [clojure.contrib.string :only [trim ltrim]]
-        [clojure.contrib.seq :only [positions]])
+        [clojure.contrib.seq :only [positions]]
+        [tbw.util :only [ignore-errors error warn rfc-1123-date]])
   (:import [java.io File]
-           [java.util.regex Pattern]
-           [java.util Date]
-           [java.util TimeZone]
-           [java.text SimpleDateFormat]))
-
-;; FIXME: start a utility file?
-(defmacro ignore-errors [& forms]
-  `(try (do ~@forms)
-        (catch java.lang.Exception _# nil)))
-
-(defn error [& args]
-  (throw (Exception. (apply str args))))
-
-(def rfc-1123-date-format (doto (SimpleDateFormat. "E, dd MMM yyyy HH:mm:ss z")
-                            (.setTimeZone (TimeZone/getTimeZone "GMT+0:0"))))
-
-(defn rfc-1123-date
-  ([] (rfc-1123-date (Date.)))
-  ([^Date date]
-     (.format rfc-1123-date-format date)))
+           [java.util.regex Pattern]))
 
 ;; Special variable and functions for the request
 (def ^{:dynamic true} *request*)
@@ -137,7 +117,7 @@
         [existing-pos] (take 1 (positions #(= (:uri-prefix %) new-uri-prefix) @tbw-sites))]
     (if (integer? existing-pos)
       (do
-        ;; FIXME: warn!
+        (warn "Existing definition found for URI" new-uri-prefix)
         (dosync (alter tbw-sites assoc existing-pos site-obj)))
       (dosync
        (alter tbw-sites conj site-obj)))))
