@@ -34,7 +34,10 @@
 ;;
 ;;
 ;;;; Code:
-(ns tbw.core)
+(ns tbw.template
+  (:use [tbw.util :only [error]])
+  (:import [java.util.regex Pattern]))
+
 (def *template-start-marker* "<!--")
 (def *template-end-marker* "-->")
 
@@ -51,7 +54,6 @@
       end-marker-length (count *template-end-marker*)]
   (defn- get-one-tmpl-tag-element [string]
     (with-tag-marker-indices [string tmpl-tag-start tmpl-tag-end]
-      ;;      (let [matcher (.matcher #"(\w+)\s+(\w+)\s*$" (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))]
       (let [matcher (.matcher #"([\w/]+)\s+([\w/]+)\s*$" (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))]
         (if (.find matcher)
           [(.group matcher 1)
@@ -182,7 +184,7 @@
         (loop [[current-env & next-env-list] (tmpl-value env) acc []]
           (if (empty? current-env)
             (apply str (:prev-string loop-tag) acc)
-            ;; merge {global env} and {local current-env}.
+            ;; Merge {global env} and {local current-env} -
             ;; {local current-env} will survive when merged
             (recur next-env-list (conj acc (loop-printer (merge env current-env))))))))))
 
@@ -213,60 +215,10 @@
   (with-tmpl-value [tmpl-value call-tag]
     (fn [env]
       (loop [[path current-env & next-parts] (tmpl-value env) string-acc []]
-        (println `(~(tmpl-value env) ~path ~current-env))
         (if (empty? path)
           (apply str (:prev-string call-tag) string-acc)
           ;; merge {global env} and {local current-env}.
           ;; {local current-env} will survive when merged
-          (recur next-parts (conj string-acc ((create-tmpl-printer (include-tmpl path)) (merge env current-env))))))))))
-
-;;;;;;;;; TESTS ;;;;;;;;;;;;;;;;;
-(let [p (create-tmpl-printer "<p class='fancy'><!-- TMPL_VAR text --></p>")]
-  (assert (= (p {}) "<p class='fancy'></p>"))
-  (assert (= (p {:text "Foo"}) "<p class='fancy'>Foo</p>")))
-
-(let [p (create-tmpl-printer "The <!-- TMPL_IF fast -->quick <!-- /TMPL_IF -->brown fox")]
-  (assert (= (p {}) "The brown fox"))
-  (assert (= (p {:fast true}) "The quick brown fox"))
-  (assert (= (p {:fast false}) "The brown fox")))
-
-(let [p (create-tmpl-printer "The <!-- TMPL_IF fast -->quick<!-- TMPL_ELSE -->slow<!-- /TMPL_IF --> brown fox")]
-  (assert (= (p {}) "The slow brown fox"))
-  (assert (= (p {:fast false}) "The slow brown fox"))
-  (assert (= (p {:fast true}) "The quick brown fox")))
-
-(let [p (create-tmpl-printer "The <!-- TMPL_UNLESS slow -->quick<!-- TMPL_ELSE -->slow<!-- /TMPL_UNLESS --> brown fox")]
-  (assert (= (p {}) "The quick brown fox"))
-  (assert (= (p {:slow false}) "The quick brown fox"))
-  (assert (= (p {:slow true}) "The slow brown fox")))
-
-(let [p (create-tmpl-printer "The <!-- TMPL_UNLESS slow -->quick<!-- /TMPL_UNLESS --> brown fox")]
-  (assert (= (p {}) "The quick brown fox"))
-  (assert (= (p {:slow false}) "The quick brown fox"))
-  (assert (= (p {:slow true}) "The  brown fox")))
-
-(let [p (create-tmpl-printer "<!-- TMPL_LOOP foo -->[<!-- TMPL_VAR bar -->,<!-- TMPL_VAR baz -->]<!-- /TMPL_LOOP -->")]
-  (assert (= (p {}) ""))
-  (assert (= (p {:foo [{:bar 0 :barz 1} {:bar 2 :barz 3}]}) "[0,][2,]"))
-  (assert (= (p {:foo [{:bar 0 :baz 1} {:bar 2 :baz 3}]}) "[0,1][2,3]"))
-  (assert (= (p {:baz 3 :foo [{:bar 0} {:bar 2}]}) "[0,3][2,3]")))
-
-(let [p (create-tmpl-printer "<!-- TMPL_LOOP foo -->[<!-- TMPL_VAR bar -->,<!-- TMPL_VAR baz -->]<!-- /TMPL_LOOP -->")]
-  (assert (= (p {}) ""))
-  (assert (= (p {:foo [{:bar 0 :barz 1} {:bar 2 :barz 3}]}) "[0,][2,]"))
-  (assert (= (p {:foo [{:bar 0 :baz 1} {:bar 2 :baz 3}]}) "[0,1][2,3]"))
-  (assert (= (p {:baz 3 :foo [{:bar 0} {:bar 2}]}) "[0,3][2,3]")))
-
-(let [p (create-tmpl-printer "The <!-- TMPL_REPEAT three -->very <!-- /TMPL_REPEAT -->fast brown fox")]
-  (assert (= (p {}) "The fast brown fox"))
-  (assert (= (p {:three 3}) "The very very very fast brown fox"))
-  (assert (= (p {:three "3"}) "The fast brown fox")))
-
-(let [p (create-tmpl-printer "Fox <!-- TMPL_INCLUDE /tmp/foo --> jumps over the lazy dog")]
-  (assert (= (p {}) "Fox FIXME jumps over the lazy dog")))
-
-(let [p (create-tmpl-printer "Fox<!-- TMPL_CALL parts --> jumps over the lazy dog")]
-  (assert (= (p {}) "Fox jumps over the lazy dog"))
-  (assert (= (p {:parts ["/a/b/c" {:foo 2 :bar 3}]}) "FoxFIXME jumps over the lazy dog")))
+          (recur next-parts (conj string-acc ((create-tmpl-printer (include-tmpl path)) (merge env current-env)))))))))
 
 ;;; TEMPLATE.CLJ ends here
