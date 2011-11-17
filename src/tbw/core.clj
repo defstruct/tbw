@@ -38,7 +38,7 @@
 (ns tbw.core
   (:use [ring.adapter.jetty :only [run-jetty]]
         ;;[clojure.string :only [ltrim]]
-        [clojure.contrib.string :only [ltrim]]
+        [clojure.contrib.string :only [trim ltrim]]
         [clojure.contrib.seq :only [positions]])
   (:import [java.io File]
            [java.util.regex Pattern]
@@ -277,6 +277,6 @@
   :template { ;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
 	     :top-template "defstruct-template.html"
              :content-marker "<!-- TMPL_VAR content -->"
-             :template-var-fn ex-template-vars})
+             :template-var-fn 'ex-template-vars})
 
 ;;; CORE.CLJ ends here
