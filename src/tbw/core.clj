@@ -37,18 +37,22 @@
 
 (ns tbw.core
   (:use [ring.adapter.jetty :only [run-jetty]]
+        [ring.middleware.params :only [wrap-params]]
         [clojure.contrib.seq :only [positions]]
         [tbw.util :only [ignore-errors error warn rfc-1123-date]])
   (:import [java.io File]
+           [java.util Date]
            [java.util.regex Pattern]))
 
 ;; Special variable and functions for the request
 (def ^{:dynamic true} *request*)
 
-;; Sigh, this is from ring-devel/src/ring/handler/dump.clj, which (I believe) should be same as
-;; keywords in build-request-map function (ring-servlet/src/ring/util/servlet.clj)
+;; From ring-devel/src/ring/handler/dump.clj, and same as
+;; keywords in build-request-map function (ring-servlet/src/ring/util/servlet.clj) ?
 (def request-keys [:server-port :server-name :remote-addr :uri :query-string :scheme :request-method
-                   :content-type :content-length :character-encoding :headers :body])
+                   :content-type :content-length :character-encoding :headers :body
+                   ;; After calling wrap-params, two additional keys:
+                   :query-params :form-params])
 
 (defn- request-reader*-form [key]
   (let [fn-name (symbol (str (name key) "*"))]
@@ -88,6 +92,8 @@
 ;; FIXME: New file for dispatchers?
 ;; Dispatchers - stealing from Hunchentoot
 ;;
+
+;; FIXME: add more code?
 (def http-not-modified 304)
 (def http-bad-request 400)
 
@@ -180,7 +186,6 @@
   {:body "FIXME: html-dispatcher"})
 
 (defn- call-request-handlers [site script-name]
-  (println :call-request-handlers)
   (if-let [html-dispatcher (get (:script->html-template site) script-name)]
     (run-html-dispatcher html-dispatcher site)
     (loop [[dispatcher & rest] (:site-dispatchers site)]
@@ -193,70 +198,19 @@
           (recur rest))
         (default-handler)))))
 
-(defn- handle-request [request]
-  (binding [*request* request]
-    (let [uri (uri*)
-          uri-prefix (apply subs uri (take 2 (positions #(= % \/) uri)))
-          [site] (take 1 (filter (fn [site-def]
-                                   (= (:uri-prefix site-def) uri-prefix))
-                                 @tbw-sites))]
-;;      (println `(:site ~site :empty? ~(empty? site) :uri-prefix ,uri-prefix))
-      (if (empty? site)
-        ;; call default handler
-        (default-handler)
-        (call-request-handlers site uri)))))
-
-;; FIXME - temporary setup
-;; (defn- handle-request [request]
-;;   (binding [*request* request]
-;;     (println `(server-name ~(server-name*) uri ~(uri*)))
-;;     {:Status  200
-;;      :headers {"Content-Type" "text/plain"}
-;;      :body    "FIXME"}))
-
-(def server (run-jetty handle-request {:port 4347, :join? false}))
-
-    ;; (try
-    ;;   (Thread/sleep 2000)
-    ;;   (let [response (http/get "http://localhost:4347")]
-    ;;     (is (= (:status response) 200))
-    ;;     (is (.startsWith (get-in response [:headers "content-type"])
-    ;;                      "text/plain"))
-    ;;     (is (= (:body response) "Hello World")))
-    ;;   (finally (.stop server)))))
-;; FIXME end
-
-(defn- ex-home-menu-vars []
-  )
-(defn- ex-services-menu-vars []
-  )
-(defn- ex-examples-menu-vars []
-  )
-(defn- ex-about-menu-vars []
-  )
-(defn- ex-contact-menu-vars []
-  )
-(defn- ex-contact-menu-vars []
-  )
-
-(def-tbw ex-website [:uri-prefix "/abc"]
-  :resource-dispatchers {"/css/"        {:type :folder :path "css"}
-                         "/img/"        {:type :folder :path "img"}
-                         "/js/"         {:type :folder :path "js"}
-                         "/yui/"        {:type :folder :path "yui"}
-                         "/favicon.ico" {:type :file   :path "img/favicon.ico"}
-                         "/robots.txt"  {:type :file   :path "etc/robots.txt"}
-                         }
-  :html-page-dispatchers {"/home.html"          ex-home-menu-vars
-                          "/services.html"	ex-services-menu-vars
-                          "/examples.html"	ex-examples-menu-vars
-                          "/about.html"         ex-about-menu-vars
-                          "/contact.html"	ex-contact-menu-vars
-                          "/thanks.html"        ex-contact-menu-vars}
-  :default-html-page    "/home.html"
-  :template { ;;:folder "DEFSTRUCT:HTML;" ;; if not given, use CWD
-	     :top-template "defstruct-template.html"
-             :content-marker "<!-- TMPL_VAR content -->"
-             :template-var-fn 'ex-template-vars})
+(def handle-request
+  (wrap-params (fn [request]
+                 (binding [*request* request]
+                   ;;(println *request*)
+                   (let [uri (uri*)
+                         uri-prefix (apply subs uri (take 2 (positions #(= % \/) uri)))
+                         [site] (take 1 (filter (fn [site-def]
+                                                  (= (:uri-prefix site-def) uri-prefix))
+                                                @tbw-sites))]
+                     ;;      (println `(:site ~site :empty? ~(empty? site) :uri-prefix ,uri-prefix))
+                     (if (empty? site)
+                       ;; call default handler
+                       (default-handler)
+                       (call-request-handlers site uri)))))))
 
 ;;; CORE.CLJ ends here
