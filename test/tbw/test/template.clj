@@ -141,4 +141,11 @@
       (is (= (p {:parts ["/a/b/c" {:foo 2 :bar 3}]}) "FoxFIXME jumps over the lazy dog"))
       (is false))))
 
+(deftest nested-tmpl
+  (let [p (create-tmpl-printer "<!-- TMPL_IF input -->\n    <h2>add two numbers</h2>\n    <form method='post' action='/'>\n      <!-- TMPL_UNLESS valid-numbers -->\n      <p>those are not both numbers!</p>\n      <!-- /TMPL_UNLESS -->\n      <input type='text' name='a'<!-- TMPL_IF a --> value='<!-- TMPL_VAR a -->'<!-- /TMPL_IF -->></input>\n      <span> + </span>\n      <input type='text' name='b'<!-- TMPL_IF b --> value='<!-- TMPL_VAR b -->'<!-- /TMPL_IF -->></input>\n      <br>\n      <input type='submit' value='add'></input>\n    </form>\n    <!-- /TMPL_IF -->\n    <!-- TMPL_IF output -->\n    <h2>two numbers added</h2>\n    <p><!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --></p>\n    <a href='/'>add more numbers</a>\n    <!-- /TMPL_IF -->\n  </body>\n</html>\n")]
+    (testing "TMPL-IF with nested TMPL_VAR"
+      (is (= (p {}) "<input type='text' name='a'></input>"))
+      (is (= (p {:a 10}) "<input type='text' name='a' value='10'></input>"))
+      (is (= (p {:a false}) "<input type='text' name='a'></input>")))))
+
 ;;; TEMPLATE.CLJ ends here
