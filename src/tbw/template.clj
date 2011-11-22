@@ -41,184 +41,128 @@
 (def *template-start-marker* "<!--")
 (def *template-end-marker* "-->")
 
-(defmacro with-tag-marker-indices [[string tag-start tag-end] & body]
-  `(let [new-string# ~string
-         ~tag-start (.indexOf new-string# *template-start-marker*)]
-     (when-not (neg? ~tag-start)
-       (let [~tag-end (.indexOf new-string# *template-end-marker* ~tag-start)]
-         (when (neg? ~tag-end)
-           (error "Invalid tag defintion: no closing tag found."))
-         ~@body))))
-
 (let [start-marker-length (count *template-start-marker*)
       end-marker-length (count *template-end-marker*)]
   (defn- get-one-tmpl-tag-element [string]
     (with-tag-marker-indices [string tmpl-tag-start tmpl-tag-end]
-      (let [matcher (.matcher #"([\w/]+)\s+([\w/]+)\s*$" (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))]
+      (println (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))
+      (let [matcher (.matcher #"\s*(/?(?i)TMPL_[\w/]+)\s+([\-\w/]*)" (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))]
         (if (.find matcher)
           [(.group matcher 1)
            (.group matcher 2)
            (subs string 0 tmpl-tag-start)
            (subs string (+ tmpl-tag-end end-marker-length))]
-          (error "No valid tag definition found." )))))
+          (error "No valid tag definition found." ))))))
 
-  (defn- parse-if-like-tmpl-tag [tmpl-tag]
-    (let [string (:next-string tmpl-tag)
-          tag-string (:tag tmpl-tag)]
-      (letfn [(get-matcher [pattern]
-                (let [m (.matcher pattern string)]
-                  (when (.find m)
-                    [(.group m 1) (when (> (.groupCount m) 1) (.group m 2)) (subs string (.end m))])))]
-        (if-let [parts (or (get-matcher (Pattern/compile (str "(.+)<!--\\s*TMPL_ELSE\\s*-->(.+)<!--\\s*/"
-                                                              tag-string
-                                                              "\\s*-->")))
-                           (get-matcher (Pattern/compile (str "(.+)<!--\\s*/"
-                                                              tag-string
-                                                              "\\s*-->"))))]
-          parts
-          (error "Invalid " tag-string " near " (subs string 0 (min 20 (count string)))))))))
-
-(defmulti %parse-tmpl-tag :tag)
-
-(defn- %simple-parse-tmpl-tag-using-keyword [tmpl-tag]
-  (-> tmpl-tag
-      (assoc :attr-converter keyword)))
-
-(defmethod %parse-tmpl-tag "TMPL_VAR" [var-tag]
-  (%simple-parse-tmpl-tag-using-keyword var-tag))
-
-(defmethod %parse-tmpl-tag "TMPL_IF" [if-tag]
-  (let [[then-string else-string next-string] (parse-if-like-tmpl-tag if-tag)]
-    (-> if-tag
-        (assoc :attr-converter keyword)
-        (assoc :then then-string)
-        (assoc :else else-string)
-        (assoc :next-string next-string))))
-
-(defmethod %parse-tmpl-tag "TMPL_UNLESS" [unless-tag]
-  (let [[then-string else-string next-string] (parse-if-like-tmpl-tag unless-tag)]
-    (-> unless-tag
-        (assoc :attr-converter keyword)
-        (assoc :then then-string)
-        (assoc :else else-string)
-        (assoc :next-string next-string))))
-
-(defn- parse-loop-like-tmpl-tag [tmpl-tag]
-  (let [next-string (:next-string tmpl-tag)
-        tag-string (:tag tmpl-tag)
-        matcher (.matcher (Pattern/compile (str "(.+)<!--\\s*/" tag-string "\\s*-->")) next-string)]
-    (when-not (.find matcher)
-      (error "Invalid " tag-string " near " (subs next-string 0 (min 20 (count next-string)))))
-    [(.group matcher 1) (subs next-string (.end matcher))]))
-
-(defmethod %parse-tmpl-tag "TMPL_LOOP" [loop-tag]
-  (let [[loop-string next-string] (parse-loop-like-tmpl-tag loop-tag)]
-    (-> loop-tag
-        (assoc :attr-converter keyword)
-        (assoc :loop loop-string)
-        (assoc :next-string next-string))))
-
-(defmethod %parse-tmpl-tag "TMPL_REPEAT" [loop-tag]
-  (let [[loop-string next-string] (parse-loop-like-tmpl-tag loop-tag)]
-    (-> loop-tag
-        (assoc :attr-converter keyword)
-        (assoc :loop loop-string)
-        (assoc :next-string next-string))))
-
-(defmethod %parse-tmpl-tag "TMPL_INCLUDE" [include-tag]
-  (-> include-tag
-      (assoc :attr-converter identity)))
-
-(defmethod %parse-tmpl-tag "TMPL_CALL" [call-tag]
-  (%simple-parse-tmpl-tag-using-keyword call-tag))
-
-;; tag, element, attribute, value
 (defn- parse-tmpl-tag [string]
-  (let [[tag-element attribute prev-string next-string] (get-one-tmpl-tag-element string)]
-    (if tag-element
-      (%parse-tmpl-tag {:tag tag-element :attr attribute :prev-string prev-string :next-string next-string})
-      string)))
+  (when-let [[tag-element attribute prev-string next-string] (get-one-tmpl-tag-element string)]
+    [{:tag tag-element :attr (if (empty? attribute) nil attribute) :prev-string prev-string} next-string]))
 
-(defmacro with-tmpl-value [[tmpl-value tmpl-tag] & body]
-  `(let [~tmpl-value ((:attr-converter ~tmpl-tag) (:attr ~tmpl-tag))]
-     ~@body))
+;; (defn create-tmpl-printer0 [string]
+;;   ;; development helper
+;;   (loop [string string stack []]
+;;     (let [[tag-map next-string] (parse-tmpl-tag string)]
+;;       (if (:tag tag-map)
+;;         ;; tag-map {:tag "TMPL_IF" :prev-string "blah" :attr :foo}
+;;         (recur next-string (conj stack tag-map))
+;;         (let [final-stack (if (empty? string)
+;;                             stack
+;;                             (conj stack string))]
+;;           final-stack)))))
 
-(defmulti make-one-tmpl-printer :tag)
+(defn- tmpl-tag-dispatcher [stack]
+  (:tag (peek stack)))
+
+(defmulti maybe-reduce-stack tmpl-tag-dispatcher)
+
+(defmethod maybe-reduce-stack "TMPL_VAR" [stack]
+  (let [var-tag (peek stack)]
+    (conj (pop stack) (fn [env]
+                        (str (:prev-string var-tag) ((keyword (:attr var-tag)) env))))))
+
+(defmethod maybe-reduce-stack "TMPL_IF" [stack]
+  stack)
+
+(defmethod maybe-reduce-stack "TMPL_ELSE" [stack]
+  (loop [if-stack (pop stack) then-stack `(~(fn [_]
+                                              (:prev-string (peek stack))))]
+    (let [tag-map (peek if-stack)]
+      (cond (fn? tag-map) (recur (pop if-stack) (conj then-stack tag-map))
+            (empty? tag-map) (error "TMPL_IF not found for TMPL_ELSE in " (:prev-string (peek stack)))
+            ;; FIXME: case insensitive comparison
+            (= (:tag tag-map) "TMPL_IF") (conj (pop if-stack) (assoc tag-map :then then-stack))
+            :else (recur (pop if-stack) (conj then-stack tag-map))))))
+
+(defn- make-if-function
+  ([prev-string env-var then]
+     (make-if-function prev-string env-var then nil))
+  ([prev-string env-var then else]
+     (fn [env]
+       (apply str prev-string
+              (if (env-var env)
+                (then env)
+                (when else (else env)))))))
+
+(defmethod maybe-reduce-stack "/TMPL_IF" [stack]
+  (loop [if-stack (pop stack) then-or-else-stack `(~(fn [_]
+                                                      (:prev-string (peek stack))))]
+    (let [tag-map (peek if-stack)]
+      (cond (fn? tag-map) (recur (pop if-stack) (conj then-or-else-stack tag-map))
+
+            (empty? tag-map) (error "TMPL_IF not found for /TMPL_IF in " (:prev-string (peek stack)))
+
+            (= (:tag tag-map) "TMPL_IF")
+            (conj (pop if-stack)
+                  (if-let [then-part (:then tag-map)]
+                    (make-if-function (:prev-string tag-map)
+                                      (keyword (:attr tag-map))
+                                      (apply juxt then-part)
+                                      (apply juxt then-or-else-stack))
+                    (make-if-function (:prev-string tag-map)
+                                      (keyword (:attr tag-map))
+                                      (apply juxt then-or-else-stack))))
+
+            :else (recur (pop if-stack) (conj then-or-else-stack tag-map))))))
+
+(defmethod maybe-reduce-stack "TMPL_LOOP" [stack]
+  stack)
+
+(defmethod maybe-reduce-stack "/TMPL_LOOP" [stack]
+  (loop [loop-stack (pop stack) body-stack `(~(fn [_]
+                                                (:prev-string (peek stack))))]
+    (let [tag-map (peek loop-stack)]
+      (cond (fn? tag-map) (recur (pop loop-stack) (conj body-stack tag-map))
+
+            (empty? tag-map) (error "TMPL_LOOP not found for /TMPL_LOOP in " (:prev-string (peek stack)))
+
+            (= (:tag tag-map) "TMPL_LOOP")
+            (let [body-fn (apply juxt body-stack)]
+              (conj (pop loop-stack)
+                    (fn [env]
+                      (loop [[current-env & next-env-list] ((keyword (:attr tag-map)) env) acc []]
+                        (if (empty? current-env)
+                          (apply str (:prev-string tag-map) acc)
+                          ;; Merge {global env} and {local current-env} -
+                          ;; {local current-env} will survive when merged
+                          (recur next-env-list (concat acc (body-fn (merge env current-env)))))))))
+
+            :else (recur (pop loop-stack) (conj body-stack tag-map))))))
 
 (defn create-tmpl-printer [string]
-  (loop [tag-map (parse-tmpl-tag string) printers []]
-    (if (string? tag-map)
-      (fn [env]
-        (if (empty? printers)
-          tag-map
-          (apply str (conj ((apply juxt printers) env) tag-map))))
-      (recur (parse-tmpl-tag (:next-string tag-map)) (conj printers (make-one-tmpl-printer tag-map))))))
-
-(defmethod make-one-tmpl-printer "TMPL_VAR" [var-tag]
-  (with-tmpl-value [tmpl-value var-tag]
-    (fn [env]
-      (str (:prev-string var-tag) (tmpl-value env)))))
-
-(defn- %make-if-unless-printer [if-unless-tag function tag-string]
-  (with-tmpl-value [tmpl-value if-unless-tag]
-    (let [then-printer (create-tmpl-printer (:then if-unless-tag))
-          else-printer (when-let [else-string (:else if-unless-tag)]
-                         (create-tmpl-printer else-string))]
-      (fn [env]
-        (str (:prev-string if-unless-tag)
-             (if (function (tmpl-value env))
-               (then-printer env)
-               (when else-printer
-                 (else-printer env))))))))
-
-(defmethod make-one-tmpl-printer "TMPL_IF" [if-tag]
-  (%make-if-unless-printer if-tag identity "TMPL_IF"))
-
-(defmethod make-one-tmpl-printer "TMPL_UNLESS" [unless-tag]
-  (%make-if-unless-printer unless-tag not "TMPL_UNLESS"))
-
-(defmethod make-one-tmpl-printer "TMPL_LOOP" [loop-tag]
-  (with-tmpl-value [tmpl-value loop-tag]
-    (let [loop-printer (create-tmpl-printer (:loop loop-tag))]
-      (fn [env]
-        (loop [[current-env & next-env-list] (tmpl-value env) acc []]
-          (if (empty? current-env)
-            (apply str (:prev-string loop-tag) acc)
-            ;; Merge {global env} and {local current-env} -
-            ;; {local current-env} will survive when merged
-            (recur next-env-list (conj acc (loop-printer (merge env current-env))))))))))
-
-(defmethod make-one-tmpl-printer "TMPL_REPEAT" [repeat-tag]
-  (with-tmpl-value [tmpl-value repeat-tag]
-    (let [repeat-printer (create-tmpl-printer (:loop repeat-tag))]
-      (fn [env]
-        (let [must-be-number (tmpl-value env)]
-          (apply str
-                 (:prev-string repeat-tag)
-                 (when (number? must-be-number)
-                   (loop [n must-be-number acc []]
-                     (if (pos? n)
-                       (recur (dec n) (conj acc (repeat-printer env)))
-                       acc)))))))))
-
-(defn- include-tmpl [path]
-  ;; valid path?
-  "FIXME")
-
-(defmethod make-one-tmpl-printer "TMPL_INCLUDE" [include-tag]
-  (with-tmpl-value [tmpl-value include-tag]
-    (let [included-string (include-tmpl tmpl-value)]
-      (fn [env]
-        (str (:prev-string include-tag) included-string)))))
-
-(defmethod make-one-tmpl-printer "TMPL_CALL" [call-tag]
-  (with-tmpl-value [tmpl-value call-tag]
-    (fn [env]
-      (loop [[path current-env & next-parts] (tmpl-value env) string-acc []]
-        (if (empty? path)
-          (apply str (:prev-string call-tag) string-acc)
-          ;; merge {global env} and {local current-env}.
-          ;; {local current-env} will survive when merged
-          (recur next-parts (conj string-acc ((create-tmpl-printer (include-tmpl path)) (merge env current-env)))))))))
+  (loop [string string stack []]
+    (let [[tag-map next-string] (parse-tmpl-tag string)]
+      (if tag-map
+        ;; tag-map {:tag "TMPL_IF" :prev-string "blah" :attr :foo}
+        (recur next-string (maybe-reduce-stack (conj stack tag-map)))
+        (let [final-stack (if (empty? string)
+                            stack
+                            (conj stack (fn [_]
+                                          string)))]
+          (when-not (every? fn? final-stack)
+            ;; FIXME: use more infomative function
+            (error "Error - unmatched ??"))
+          (fn [env]
+            ;; Final stack must be functions only
+            (apply str ((apply juxt final-stack) env))))))))
 
 ;;; TEMPLATE.CLJ ends here
