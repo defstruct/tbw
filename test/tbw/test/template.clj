@@ -142,10 +142,17 @@
       (is false))))
 
 (deftest nested-tmpl
-  (let [p (create-tmpl-printer "<!-- TMPL_IF input -->\n    <h2>add two numbers</h2>\n    <form method='post' action='/'>\n      <!-- TMPL_UNLESS valid-numbers -->\n      <p>those are not both numbers!</p>\n      <!-- /TMPL_UNLESS -->\n      <input type='text' name='a'<!-- TMPL_IF a --> value='<!-- TMPL_VAR a -->'<!-- /TMPL_IF -->></input>\n      <span> + </span>\n      <input type='text' name='b'<!-- TMPL_IF b --> value='<!-- TMPL_VAR b -->'<!-- /TMPL_IF -->></input>\n      <br>\n      <input type='submit' value='add'></input>\n    </form>\n    <!-- /TMPL_IF -->\n    <!-- TMPL_IF output -->\n    <h2>two numbers added</h2>\n    <p><!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --></p>\n    <a href='/'>add more numbers</a>\n    <!-- /TMPL_IF -->\n  </body>\n</html>\n")]
+  (let [p (create-tmpl-printer "<!-- TMPL_IF input --> TMPL_IF input start <!-- TMPL_UNLESS valid-numbers --> TMPL_UNLESS valid-numbers start <!-- /TMPL_UNLESS --> TMPL_UNLESS valid-numbers end <!-- TMPL_IF a -->TMPL_IF a start '<!-- TMPL_VAR a -->' 'TMPL_VAR a' <!-- /TMPL_IF --> TMPL_IF a end <!-- TMPL_IF b --> TMPL_IF b start '<!-- TMPL_VAR b -->' 'TMPL_VAR b' <!-- /TMPL_IF --> TMPL_IF b end <!-- /TMPL_IF --> TMPL_IF input end <!-- TMPL_IF output --> TMPL_IF output start<!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --> a + b = sum <!-- /TMPL_IF --> TMPL_IF output end")]
     (testing "TMPL-IF with nested TMPL_VAR"
-      (is (= (p {}) "<input type='text' name='a'></input>"))
-      (is (= (p {:a 10}) "<input type='text' name='a' value='10'></input>"))
-      (is (= (p {:a false}) "<input type='text' name='a'></input>")))))
+      (is (= (p {}) " TMPL_IF input end  TMPL_IF output end"))
+      (is (= (p {:input true}) " TMPL_IF input start  TMPL_UNLESS valid-numbers start  TMPL_UNLESS valid-numbers end  TMPL_IF a end  TMPL_IF b end  TMPL_IF input end  TMPL_IF output end"))
+      (is (= (p {:input true :valid-numbers true}) " TMPL_IF input start  TMPL_UNLESS valid-numbers end  TMPL_IF a end  TMPL_IF b end  TMPL_IF input end  TMPL_IF output end"))
+      (is (= (p {:input true :valid-numbers false :a 1 :b 2})
+             " TMPL_IF input start  TMPL_UNLESS valid-numbers start  TMPL_UNLESS valid-numbers end TMPL_IF a start '1' 'TMPL_VAR a'  TMPL_IF a end  TMPL_IF b start '2' 'TMPL_VAR b'  TMPL_IF b end  TMPL_IF input end  TMPL_IF output end"))
+      (is (= (p {:input true :valid-numbers true :a 1 :b 2})
+             " TMPL_IF input start  TMPL_UNLESS valid-numbers end TMPL_IF a start '1' 'TMPL_VAR a'  TMPL_IF a end  TMPL_IF b start '2' 'TMPL_VAR b'  TMPL_IF b end  TMPL_IF input end  TMPL_IF output end"))
+
+      (is (= (p {:output true}) " TMPL_IF input end  TMPL_IF output start +  =  a + b = sum  TMPL_IF output end"))
+      (is (= (p {:output true :a 1 :b 2 :sum 3}) " TMPL_IF input end  TMPL_IF output start1 + 2 = 3 a + b = sum  TMPL_IF output end")))))
 
 ;;; TEMPLATE.CLJ ends here
