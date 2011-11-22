@@ -39,8 +39,11 @@
   (:use [ring.adapter.jetty :only [run-jetty]]
         [ring.middleware.params :only [wrap-params]]
         [clojure.contrib.seq :only [positions]]
+        [tbw.template :only [create-tmpl-printer]]
         [tbw.util :only [ignore-errors error warn rfc-1123-date]])
-  (:import [java.io File]
+  (:import [java.io File FileInputStream]
+           [java.nio.channels FileChannel FileChannel$MapMode]
+           [java.nio.charset Charset]
            [java.util Date]
            [java.util.regex Pattern]))
 
@@ -73,9 +76,9 @@
 ;; Global mapping used in handle-request
 (def tbw-sites (ref []))
 
-(defrecord TemplateBasedWebSite [script->html-template uri-prefix default-html-page site-dispatchers common-template-var-fn])
+(defrecord TemplateBasedWebSite [script->html-template uri-prefix default-html-page site-dispatchers])
 
-(defn- make-tbw-site [& {:keys [script->html-template uri-prefix default-html-page site-dispatchers common-template-var-fn]
+(defn- make-tbw-site [& {:keys [script->html-template uri-prefix default-html-page site-dispatchers]
                          :or {uri-prefix "/"}}]
   {:pre [(identity script->html-template) (identity default-html-page) (identity site-dispatchers) (and (= (get uri-prefix 0) \/)
                                                                        (not (= (get uri-prefix (dec (count uri-prefix)))
@@ -83,8 +86,7 @@
   (let [new-site (TemplateBasedWebSite. script->html-template
                                         uri-prefix
                                         default-html-page
-                                        site-dispatchers
-                                        common-template-var-fn)]
+                                        site-dispatchers)]
 
 
     new-site))
@@ -154,26 +156,47 @@
             (= (:type val) :folder) (recur (rest defs) file-defs (conj folder-defs [(str prefix key) val]))
             :else (error "Unknown resource type: " (:type val))))))
 
-(defn- canonicalize-html-dispatchers [uri-prefix html-page-dispatchers template]
-  (into {} (map (fn [[k v]]
-                  ;; FIXME: template must be html
-                  [(str uri-prefix k) {:var-function v :template template}])
-                html-page-dispatchers)))
+;; FIXME: is this really necessary? Make it simple
+;;              Need to add/pass encoding info at def-tbw level
+(defn- make-apply-env-fn [env-fn html-file]
+  (let [file-channel (.getChannel (FileInputStream. html-file))]
+    (fn []
+      ((create-tmpl-printer (.. (Charset/forName "UTF-8")
+                                newDecoder
+                                (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
+                                toString))
+       (env-fn)))))
+
+(defn- canonicalize-html-dispatchers [uri-prefix html-folder html-page->env-mappers]
+  (let [html-folder (or (File. html-folder) (File. (System/getProperty "user.dir") html-folder))]
+    (when-not (.exists html-folder)
+      (error "HTML folder " (.toString html-folder) " does not exist."))
+    (when-not (.isDirectory (.toString html-folder))
+      (error html-folder "is not a folder."))
+
+    (into {} (map (fn [[file env-fn]]
+                    (let [html-file (File. html-folder file)]
+                      (when-not (.exists html-file)
+                        (error "HTML file " (.toString html-file) " does not exist."))
+                      (when-not (.isFile html-file)
+                        (error html-folder "is not a file."))
+                      (when-not (.canRead html-file)
+                        (error html-folder "is not readable."))
+                      [(str uri-prefix file) (make-apply-env-fn env-fn html-file)])
+                    html-page->env-mappers)))))
 
 (defmacro def-tbw [site-name [& {:keys [uri-prefix]}]
-                   & {:keys [resource-dispatchers html-page-dispatchers
-                             default-html-page template common-template-var-fn]}]
-  {:pre [resource-dispatchers html-page-dispatchers
-         default-html-page template ;;common-template-var-fn
-         ]}
+                   & {:keys [resource-dispatchers html-folder html-page->env-mappers default-html-page]}]
+  {:pre [resource-dispatchers html-page->env-mappers
+         default-html-page
+         html-folder]}
   (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)
-        html-page-dispatchers (canonicalize-html-dispatchers uri-prefix html-page-dispatchers template)]
+        html-page->env-mappers (canonicalize-html-dispatchers uri-prefix html-folder html-page->env-mappers)]
     `(do
-       (update-tbw-sites! (make-tbw-site :script->html-template ~html-page-dispatchers
+       (update-tbw-sites! (make-tbw-site :script->html-template ~html-page->env-mappers
                                          :uri-prefix ~uri-prefix
                                          :default-html-page ~default-html-page
-                                         :site-dispatchers (make-resource-dispatchers ~resource-dispatchers)
-                                         :common-template-var-fn ~common-template-var-fn)))))
+                                         :site-dispatchers (make-resource-dispatchers ~resource-dispatchers))))))
 
 (defn- default-handler []
   ;; FIXME: logging
