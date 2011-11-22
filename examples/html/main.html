@@ -1,0 +1,28 @@
+<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>
+<html>
+  <head>
+    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
+    <title>adder</title>
+  </head>
+
+  <body>
+    <!-- TMPL_IF input -->
+    <h2>add two numbers</h2>
+    <form method='post' action='/'>
+      <!-- TMPL_UNLESS valid-numbers -->
+      <p>those are not both numbers!</p>
+      <!-- /TMPL_UNLESS -->
+      <input type='text' name='a'<!-- TMPL_IF a --> value='<!-- TMPL_VAR a -->'<!-- /TMPL_IF -->></input>
+      <span> + </span>
+      <input type='text' name='b'<!-- TMPL_IF b --> value='<!-- TMPL_VAR b -->'<!-- /TMPL_IF -->></input>
+      <br>
+      <input type='submit' value='add'></input>
+    </form>
+    <!-- /TMPL_IF -->
+    <!-- TMPL_IF output -->
+    <h2>two numbers added</h2>
+    <p><!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --></p>
+    <a href='/'>add more numbers</a>
+    <!-- /TMPL_IF -->
+  </body>
+</html>
