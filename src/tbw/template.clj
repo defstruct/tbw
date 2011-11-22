@@ -41,11 +41,20 @@
 (def *template-start-marker* "<!--")
 (def *template-end-marker* "-->")
 
+(defmacro with-tag-marker-indices [[string tag-start tag-end] & body]
+  `(let [new-string# ~string
+         ~tag-start (.indexOf new-string# *template-start-marker*)]
+     (when-not (neg? ~tag-start)
+       (let [~tag-end (.indexOf new-string# *template-end-marker* ~tag-start)]
+         (when (neg? ~tag-end)
+           (error "Invalid tag defintion: no closing tag found."))
+         ~@body))))
+
 (let [start-marker-length (count *template-start-marker*)
       end-marker-length (count *template-end-marker*)]
   (defn- get-one-tmpl-tag-element [string]
     (with-tag-marker-indices [string tmpl-tag-start tmpl-tag-end]
-      (println (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))
+      ;;(println (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))
       (let [matcher (.matcher #"\s*(/?(?i)TMPL_[\w/]+)\s+([\-\w/]*)" (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))]
         (if (.find matcher)
           [(.group matcher 1)
@@ -75,6 +84,19 @@
 
 (defmulti maybe-reduce-stack tmpl-tag-dispatcher)
 
+(defmacro with-reducing-tmpl-stack [[front-stack back-stack tag-map open-tags close-tag] stack body]
+  `(loop [~front-stack (pop ~stack) ~back-stack `(~(fn [~'_]
+                                                     (:prev-string (peek ~stack))))]
+     (let [~tag-map (peek ~front-stack)]
+       (cond (fn? ~tag-map) (recur (pop ~front-stack) (conj ~back-stack ~tag-map))
+
+             (empty? ~tag-map) (error "Possisble open tags" ~(seq open-tags) " not found for " ~close-tag " in "
+                                      (:prev-string (peek ~stack)))
+
+             ;; FIXME: case insensitive comparison
+             (~(set open-tags) (:tag ~tag-map)) ~body
+             :else (recur (pop ~front-stack) (conj ~back-stack ~tag-map))))))
+
 (defmethod maybe-reduce-stack "TMPL_VAR" [stack]
   (let [var-tag (peek stack)]
     (conj (pop stack) (fn [env]
@@ -84,14 +106,8 @@
   stack)
 
 (defmethod maybe-reduce-stack "TMPL_ELSE" [stack]
-  (loop [if-stack (pop stack) then-stack `(~(fn [_]
-                                              (:prev-string (peek stack))))]
-    (let [tag-map (peek if-stack)]
-      (cond (fn? tag-map) (recur (pop if-stack) (conj then-stack tag-map))
-            (empty? tag-map) (error "TMPL_IF not found for TMPL_ELSE in " (:prev-string (peek stack)))
-            ;; FIXME: case insensitive comparison
-            (= (:tag tag-map) "TMPL_IF") (conj (pop if-stack) (assoc tag-map :then then-stack))
-            :else (recur (pop if-stack) (conj then-stack tag-map))))))
+  (with-reducing-tmpl-stack [if-stack then-stack tag-map ["TMPL_IF" "TMPL_UNLESS"] "TMPL_ELSE"] stack
+     (conj (pop if-stack) (assoc tag-map :then then-stack))))
 
 (defn- make-if-function
   ([prev-string env-var then]
@@ -103,50 +119,63 @@
                 (then env)
                 (when else (else env)))))))
 
+(defn %reduce-if-like-tag [stack cond-function open-tag close-tag]
+  (with-reducing-tmpl-stack [if-stack then-or-else-stack tag-map [open-tag] close-tag] stack
+    (conj (pop if-stack)
+          (if-let [then-part (:then tag-map)]
+            (make-if-function (:prev-string tag-map)
+                              (cond-function (:attr tag-map))
+                              (apply juxt then-part)
+                              (apply juxt then-or-else-stack))
+            (make-if-function (:prev-string tag-map)
+                              (cond-function (:attr tag-map))
+                              (apply juxt then-or-else-stack))))))
+
 (defmethod maybe-reduce-stack "/TMPL_IF" [stack]
-  (loop [if-stack (pop stack) then-or-else-stack `(~(fn [_]
-                                                      (:prev-string (peek stack))))]
-    (let [tag-map (peek if-stack)]
-      (cond (fn? tag-map) (recur (pop if-stack) (conj then-or-else-stack tag-map))
+  (%reduce-if-like-tag stack keyword "TMPL_IF" "/TMPL_IF"))
 
-            (empty? tag-map) (error "TMPL_IF not found for /TMPL_IF in " (:prev-string (peek stack)))
+(defmethod maybe-reduce-stack "TMPL_UNLESS" [stack]
+  stack)
 
-            (= (:tag tag-map) "TMPL_IF")
-            (conj (pop if-stack)
-                  (if-let [then-part (:then tag-map)]
-                    (make-if-function (:prev-string tag-map)
-                                      (keyword (:attr tag-map))
-                                      (apply juxt then-part)
-                                      (apply juxt then-or-else-stack))
-                    (make-if-function (:prev-string tag-map)
-                                      (keyword (:attr tag-map))
-                                      (apply juxt then-or-else-stack))))
-
-            :else (recur (pop if-stack) (conj then-or-else-stack tag-map))))))
+(defmethod maybe-reduce-stack "/TMPL_UNLESS" [stack]
+  (%reduce-if-like-tag stack (comp complement keyword) "TMPL_UNLESS" "/TMPL_UNLESS"))
 
 (defmethod maybe-reduce-stack "TMPL_LOOP" [stack]
   stack)
 
 (defmethod maybe-reduce-stack "/TMPL_LOOP" [stack]
-  (loop [loop-stack (pop stack) body-stack `(~(fn [_]
-                                                (:prev-string (peek stack))))]
-    (let [tag-map (peek loop-stack)]
-      (cond (fn? tag-map) (recur (pop loop-stack) (conj body-stack tag-map))
+  (with-reducing-tmpl-stack [loop-stack body-stack tag-map ["TMPL_LOOP"] "/TMPL_LOOP"] stack
+    (let [body-fn (apply juxt body-stack)]
+      (conj (pop loop-stack)
+            (fn [env]
+              (loop [[current-env & next-env-list] ((keyword (:attr tag-map)) env) acc []]
+                (if (empty? current-env)
+                  (apply str (:prev-string tag-map) acc)
+                  ;; Merge {global env} and {local current-env} -
+                  ;; {local current-env} will survive when merged
+                  (recur next-env-list (concat acc (body-fn (merge env current-env)))))))))))
 
-            (empty? tag-map) (error "TMPL_LOOP not found for /TMPL_LOOP in " (:prev-string (peek stack)))
+(defmethod maybe-reduce-stack "TMPL_REPEAT" [stack]
+  stack)
 
-            (= (:tag tag-map) "TMPL_LOOP")
-            (let [body-fn (apply juxt body-stack)]
-              (conj (pop loop-stack)
-                    (fn [env]
-                      (loop [[current-env & next-env-list] ((keyword (:attr tag-map)) env) acc []]
-                        (if (empty? current-env)
-                          (apply str (:prev-string tag-map) acc)
-                          ;; Merge {global env} and {local current-env} -
-                          ;; {local current-env} will survive when merged
-                          (recur next-env-list (concat acc (body-fn (merge env current-env)))))))))
+(defmethod maybe-reduce-stack "/TMPL_REPEAT" [stack]
+  (with-reducing-tmpl-stack [repeat-stack body-stack tag-map ["TMPL_REPEAT"] "/TMPL_REPEAT"] stack
+    (let [body-fn (apply juxt body-stack)]
+      (conj (pop repeat-stack)
+            (fn [env]
+              (let [repeat-n ((keyword (:attr tag-map)) env)]
+                (if (integer? repeat-n)
+                  (loop [i repeat-n acc []]
+                    (if (<= i 0)
+                      (apply str (:prev-string tag-map) acc)
+                      (recur (dec i) (concat acc (body-fn env)))))
+                  (:prev-string tag-map))))))))
 
-            :else (recur (pop loop-stack) (conj body-stack tag-map))))))
+(defmethod maybe-reduce-stack "TMPL_INCLUDE" [stack]
+  (error "TMPL_INCLUDE not implemented yet"))
+
+(defmethod maybe-reduce-stack "TMPL_CALL" [stack]
+  (error "TMPL_CALL not implemented yet"))
 
 (defn create-tmpl-printer [string]
   (loop [string string stack []]
