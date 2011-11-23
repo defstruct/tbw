@@ -177,9 +177,17 @@
          html-folder]}
   (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)]
     `(do
-       (update-tbw-sites! (make-tbw-site :script->html-template (canonicalize-html-dispatchers ~uri-prefix
-                                                                                               ~html-folder
-                                                                                               ~html-page->env-mappers)
+       (update-tbw-sites! (make-tbw-site :script->html-template
+                                         (canonicalize-html-dispatchers ~uri-prefix
+                                                                        ~html-folder
+                                                                        ~(apply hash-map
+                                                                                ;; this allows changing env-mappers
+                                                                                (mapcat (fn [[html func]]
+                                                                                          [html
+                                                                                           `(fn []
+                                                                                              (~func))])
+                                                                                        html-page->env-mappers)))
+
                                          :uri-prefix ~uri-prefix
                                          :default-html-page ~default-html-page
                                          :site-dispatchers (make-resource-dispatchers ~resource-dispatchers))))))
