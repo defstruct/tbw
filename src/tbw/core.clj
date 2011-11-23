@@ -191,10 +191,8 @@
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
 (defn- run-html-dispatcher [html-dispatcher site]
-  (binding [*response* {:status
-  {:status
-   :headers
-   :body (html-dispatcher)})
+  (binding [*response* {:status +http-ok+ :headers ""}]
+    (assoc *response* :body (html-dispatcher))))
 
 (defn- call-request-handlers [site script-name]
   (if-let [html-dispatcher (get (:script->html-template site) script-name)]
