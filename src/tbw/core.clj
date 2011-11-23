@@ -40,7 +40,7 @@
         [ring.middleware.params :only [wrap-params]]
         [clojure.contrib.seq :only [positions]]
         [tbw.template :only [create-tmpl-printer]]
-        [tbw.util :only [ignore-errors error warn rfc-1123-date]])
+        [tbw.util :only [ignore-errors error warn rfc-1123-date with-existing-file]])
   (:import [java.io File FileInputStream]
            [java.nio.channels FileChannel FileChannel$MapMode]
            [java.nio.charset Charset]
@@ -131,21 +131,14 @@
        (alter tbw-sites conj site-obj)))))
 
 (defn- make-resource-dispatchers [resource-dispatchers]
-  (let [cwd (System/getProperty "user.dir")]
-    (vec (map (fn [[prefix {type :type  path :path}]]
-                (let [file1 (File. path)
-                      file2 (File. (str cwd
-                                        (when-not (= (get path 0) \/) "/")
-                                        path))
-                      file? (= type :file)
-                      file (cond (.exists file1) file1
-                                 (.exists file2) file2
-                                 :else (error "Expected " (name type) " not found: " file1 " or " file2))]
+  (vec (map (fn [[prefix {type :type  path :path}]]
+              (with-existing-file [file path :cwd true]
+                (let [file? (= type :file)]
                   (assert (=  (.isFile file) file?))
                   (if file?
                     (create-static-file-dispatcher prefix file)
-                    (create-folder-dispatcher prefix file))))
-              resource-dispatchers))))
+                    (create-folder-dispatcher prefix file)))))
+            resource-dispatchers)))
 
 (defn- canonicalize-resource-dispatchers "Build sorted and prefixed resource dispatcher defs."
   [prefix resource-dispatchers]
