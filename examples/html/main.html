@@ -8,7 +8,7 @@
   <body>
     <!-- TMPL_IF input -->
     <h2>add two numbers</h2>
-    <form method='post' action='/'>
+    <form method='post'>
       <!-- TMPL_UNLESS valid-numbers -->
       <p>those are not both numbers!</p>
       <!-- /TMPL_UNLESS -->
@@ -22,7 +22,7 @@
     <!-- TMPL_IF output -->
     <h2>two numbers added</h2>
     <p><!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --></p>
-    <a href='/'>add more numbers</a>
+    <a href='/adder/main.html'>add more numbers</a>
     <!-- /TMPL_IF -->
   </body>
 </html>
