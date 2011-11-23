@@ -36,8 +36,10 @@
 ;;;; Code:
 
 (ns tbw.util
+  (:use [clojure.contrib.macro-utils :only [macrolet]])
   (:import [java.util Date]
            [java.util TimeZone]
+           [java.io File]
            [java.text SimpleDateFormat]))
 
 (defmacro ignore-errors [& forms]
@@ -57,5 +59,21 @@
   ([] (rfc-1123-date (Date.)))
   ([^Date date]
      (.format rfc-1123-date-format date)))
+
+(defmacro with-existing-file [[file path & {:keys [parent cwd]}] & body]
+  {:pre [(not (and parent cwd))]}
+  (let [path-sym (gensym "path")]
+    `(let [~path-sym ~path
+           file1# (File. ~path-sym)
+           file2# ~(cond parent `(File. ~parent ~path-sym)
+                         cwd    `(File. (System/getProperty "user.dir") ~path-sym)
+                         :else nil)
+           ~file (cond (.exists file1#) file1#
+                       (and (not (nil? file2#)) (.exists file2#)) file2#)]
+       (when-not ~file
+         (error "File does not exist: " (.toString file1#)
+                (when file2#
+                  (str " or " (.toString file2#)))))
+       ~@body)))
 
 ;;; UTIL.CLJ ends here
