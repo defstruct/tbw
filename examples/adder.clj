@@ -66,6 +66,8 @@
                          }
   :html-folder "examples/html"
   :html-page->env-mappers {"main.html" get-adder-env}
+  ;; FIXME: if no mapping found, render default
+  ;; (e.g. /adder/)
   :default-html-page    "main.html")
 
 (defonce server (run-jetty tbw-handle-request {:port 4347, :join? false}))
