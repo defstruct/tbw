@@ -53,7 +53,7 @@
                     (read-string b))]
         (if (and (number? num-a) (number? num-b))
           {:output true :a num-a :b num-b :sum (+ num-a num-b)}
-          {:input  true :valid-numbers false :a a :b b }))
+          {:input  true :show-invalid-message true :a a :b b }))
       {:input true})))
 
 

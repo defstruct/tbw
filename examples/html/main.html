@@ -9,9 +9,9 @@
     <!-- TMPL_IF input -->
     <h2>add two numbers</h2>
     <form method='post'>
-      <!-- TMPL_UNLESS valid-numbers -->
+      <!-- TMPL_if show-invalid-message -->
       <p>those are not both numbers!</p>
-      <!-- /TMPL_UNLESS -->
+      <!-- /TMPL_if -->
       <input type='text' name='a'<!-- TMPL_IF a --> value='<!-- TMPL_VAR a -->'<!-- /TMPL_IF -->></input>
       <span> + </span>
       <input type='text' name='b'<!-- TMPL_IF b --> value='<!-- TMPL_VAR b -->'<!-- /TMPL_IF -->></input>
