@@ -38,6 +38,7 @@
 (ns tbw.core
   (:use [ring.middleware.params :only [wrap-params]]
         [clojure.contrib.seq :only [positions]]
+        [tbw.specials]
         [tbw.template :only [create-tmpl-printer]]
         [tbw.util :only [ignore-errors error warn rfc-1123-date with-existing-file]])
   (:import [java.io File FileInputStream]
@@ -48,6 +49,7 @@
 
 ;; Special variable and functions for the request
 (def ^{:dynamic true} *request*)
+(def ^{:dynamic true} *response*)
 
 ;; From ring-devel/src/ring/handler/dump.clj, and same as
 ;; keywords in build-request-map function (ring-servlet/src/ring/util/servlet.clj) ?
@@ -90,18 +92,10 @@
 
     new-site))
 
-;; FIXME: New file for dispatchers?
-;; Dispatchers - stealing from Hunchentoot
-;;
-
-;; FIXME: add more code?
-(def http-not-modified 304)
-(def http-bad-request 400)
-
 (defn- handle-static-file [^File file]
   (let [last-modified (rfc-1123-date (Date. (.lastModified file)))]
     (if (= (get (headers*) "if-modified-since") last-modified)
-      {:status http-not-modified}
+      {:status +http-not-modified+}
       {:body file
        :headers {"last-modified" (rfc-1123-date (Date. last-modified))}})))
 
@@ -192,14 +186,15 @@
 
 (defn- default-handler []
   ;; FIXME: logging
-  {:status http-bad-request
+  {:status +http-bad-request+
    :headers {"Content-Type" "text/html; charset=utf-8"}
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
 (defn- run-html-dispatcher [html-dispatcher site]
-  ;; FIXME: Get and use compiled/cached html from site
-  ;;(println `(~html-dispatcher ~(:script->html-template site)))
-  {:body (html-dispatcher)})
+  (binding [*response* {:status
+  {:status
+   :headers
+   :body (html-dispatcher)})
 
 (defn- call-request-handlers [site script-name]
   (if-let [html-dispatcher (get (:script->html-template site) script-name)]

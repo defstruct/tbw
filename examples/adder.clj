@@ -37,6 +37,7 @@
 
 (ns tbw.examples.adder
   (:use [tbw.core :only [def-tbw form-params* tbw-handle-request]]
+        [tbw.specials]
         [ring.adapter.jetty :only [run-jetty]]))
 
 (defn- get-adder-env []
