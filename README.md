@@ -14,7 +14,7 @@ The template idea from HTML-TEMPLATE written by Edi Weitz.
 
 ## Usage
 
-FIXME: write
+Pleasse check tbw/examples/adder.clj
 
 ## License
 
