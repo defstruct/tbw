@@ -36,8 +36,7 @@
 ;;;; Code:
 
 (ns tbw.core
-  (:use [ring.adapter.jetty :only [run-jetty]]
-        [ring.middleware.params :only [wrap-params]]
+  (:use [ring.middleware.params :only [wrap-params]]
         [clojure.contrib.seq :only [positions]]
         [tbw.template :only [create-tmpl-printer]]
         [tbw.util :only [ignore-errors error warn rfc-1123-date with-existing-file]])
@@ -78,7 +77,7 @@
 
 (defrecord TemplateBasedWebSite [script->html-template uri-prefix default-html-page site-dispatchers])
 
-(defn- make-tbw-site [& {:keys [script->html-template uri-prefix default-html-page site-dispatchers]
+(defn make-tbw-site [& {:keys [script->html-template uri-prefix default-html-page site-dispatchers]
                          :or {uri-prefix "/"}}]
   {:pre [(identity script->html-template) (identity default-html-page) (identity site-dispatchers) (and (= (get uri-prefix 0) \/)
                                                                        (not (= (get uri-prefix (dec (count uri-prefix)))
@@ -120,7 +119,7 @@
          ;;(println `(:got2 ,(subs uri (.end matcher))))
          (fn [] (handle-static-file (File. file (subs uri (.end matcher)))))))))
 
-(defn- update-tbw-sites! [site-obj]
+(defn update-tbw-sites! [site-obj]
   (let [new-uri-prefix (:uri-prefix site-obj)
         [existing-pos] (take 1 (positions #(= (:uri-prefix %) new-uri-prefix) @tbw-sites))]
     (if (integer? existing-pos)
@@ -130,7 +129,7 @@
       (dosync
        (alter tbw-sites conj site-obj)))))
 
-(defn- make-resource-dispatchers [resource-dispatchers]
+(defn make-resource-dispatchers [resource-dispatchers]
   (vec (map (fn [[prefix {type :type  path :path}]]
               (with-existing-file [file path :cwd true]
                 (let [file? (= type :file)]
@@ -154,17 +153,16 @@
 (defn- make-apply-env-fn [env-fn html-file]
   (let [file-channel (.getChannel (FileInputStream. html-file))]
     (fn []
+      ;;(println `(~(form-params*) ~(env-fn)))
       ((create-tmpl-printer (.. (Charset/forName "UTF-8")
                                 newDecoder
                                 (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
                                 toString))
        (env-fn)))))
 
-(defn- canonicalize-html-dispatchers [uri-prefix html-folder html-page->env-mappers]
-  (let [html-folder (or (File. html-folder) (File. (System/getProperty "user.dir") html-folder))]
-    (when-not (.exists html-folder)
-      (error "HTML folder " (.toString html-folder) " does not exist."))
-    (when-not (.isDirectory (.toString html-folder))
+(defn canonicalize-html-dispatchers [uri-prefix html-folder html-page->env-mappers]
+  (with-existing-file [html-folder html-folder :cwd true]
+    (when-not (.isDirectory html-folder)
       (error html-folder "is not a folder."))
 
     (into {} (map (fn [[file env-fn]]
@@ -175,18 +173,19 @@
                         (error html-folder "is not a file."))
                       (when-not (.canRead html-file)
                         (error html-folder "is not readable."))
-                      [(str uri-prefix file) (make-apply-env-fn env-fn html-file)])
-                    html-page->env-mappers)))))
+                      [(str uri-prefix "/" file) (make-apply-env-fn env-fn html-file)]))
+                  html-page->env-mappers))))
 
 (defmacro def-tbw [site-name [& {:keys [uri-prefix]}]
                    & {:keys [resource-dispatchers html-folder html-page->env-mappers default-html-page]}]
   {:pre [resource-dispatchers html-page->env-mappers
          default-html-page
          html-folder]}
-  (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)
-        html-page->env-mappers (canonicalize-html-dispatchers uri-prefix html-folder html-page->env-mappers)]
+  (let [resource-dispatchers (canonicalize-resource-dispatchers uri-prefix resource-dispatchers)]
     `(do
-       (update-tbw-sites! (make-tbw-site :script->html-template ~html-page->env-mappers
+       (update-tbw-sites! (make-tbw-site :script->html-template (canonicalize-html-dispatchers ~uri-prefix
+                                                                                               ~html-folder
+                                                                                               ~html-page->env-mappers)
                                          :uri-prefix ~uri-prefix
                                          :default-html-page ~default-html-page
                                          :site-dispatchers (make-resource-dispatchers ~resource-dispatchers))))))
@@ -199,7 +198,8 @@
 
 (defn- run-html-dispatcher [html-dispatcher site]
   ;; FIXME: Get and use compiled/cached html from site
-  {:body "FIXME: html-dispatcher"})
+  ;;(println `(~html-dispatcher ~(:script->html-template site)))
+  {:body (html-dispatcher)})
 
 (defn- call-request-handlers [site script-name]
   (if-let [html-dispatcher (get (:script->html-template site) script-name)]
@@ -214,7 +214,7 @@
           (recur rest))
         (default-handler)))))
 
-(def handle-request
+(def tbw-handle-request
   (wrap-params (fn [request]
                  (binding [*request* request]
                    ;;(println *request*)
