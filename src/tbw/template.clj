@@ -58,7 +58,8 @@
       end-marker-length (count *template-end-marker*)]
   (defn- get-one-tmpl-tag-element [string]
     (with-tag-marker-indices [string tmpl-tag-start tmpl-tag-end]
-      (let [matcher (.matcher #"\s*(/?(?i)TMPL_[\w/]+)\s+([\-\.\w/]*)" (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))]
+      (let [matcher (.matcher #"\s*(/?(?i)TMPL_[\w/]+)\s+([\-\.\w/]*)"
+                              (subs string (+ tmpl-tag-start start-marker-length) tmpl-tag-end))]
         (if (.find matcher)
           [(upper-case (.group matcher 1))
            (.group matcher 2)
@@ -183,16 +184,22 @@
                   (:prev-string tag-map))))))))
 
 (defn- make-include-function [file-path prev-string]
+  ;; FIXME: refactor! See make-apply-env-fn
   (with-existing-file [file file-path :cwd true]
-    (let [file-channel (.getChannel (FileInputStream. file))]
-      (fn [env]
-        (str prev-string
-             ;; FIXME: is there simple way without using charset?
-             ((create-tmpl-printer (.. (Charset/forName "UTF-8")
-                                       newDecoder
-                                       (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
-                                       toString))
-              env))))))
+    (letfn [(%create-tmpl-printer []
+              (let [file-channel (.getChannel (FileInputStream. file))]
+                (create-tmpl-printer (.. (Charset/forName "UTF-8")
+                                         newDecoder
+                                         (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
+                                         toString))))]
+      (let [tmpl-printer-timestamp (atom (.lastModified file))
+            tmpl-printer (atom (%create-tmpl-printer))]
+        (fn [env]
+          (when-not (= (.lastModified file) @tmpl-printer-timestamp)
+            (swap! tmpl-printer (fn [_] (%create-tmpl-printer)))
+            (swap! tmpl-printer-timestamp (fn [_] (.lastModified file))))
+          (str prev-string
+               (@tmpl-printer env)))))))
 
 (defmethod maybe-reduce-stack "TMPL_INCLUDE" [stack]
   (let [include-tag (peek stack)]
