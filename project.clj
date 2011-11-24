@@ -35,8 +35,8 @@
 ;;
 ;;;; Code:
 
-(defproject tbw "0.0.1-SNAPSHOT"
-  :description "FIXME: write description"
+(defproject tbw "0.1.0-RC1"
+  :description "tbw - template based web"
   :url "https://github.com/defstruct/tbw"
   :dependencies [[org.clojure/clojure "1.3.0"]
 		 [org.clojure/clojure-contrib "1.2.0"]
