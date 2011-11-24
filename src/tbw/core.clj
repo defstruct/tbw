@@ -154,14 +154,8 @@
     (binding [*tmpl-printer-timestamp* (.lastModified html-file)
               *tmpl-printer* (%create-tmpl-printer)]
       (fn []
-        (println :printer)
-        (println *tmpl-printer*)
-        (println :printer-timstamp)
-        (println *tmpl-printer*)
         (when-not (= (.lastModified html-file) *tmpl-printer-timestamp*)
-          (println :foo2)
           (set! *tmpl-printer* (%create-tmpl-printer)))
-        (println :foo3)
         (*tmpl-printer* (env-fn))))))
 
 (defn- make-apply-env-fn [env-fn html-file]
