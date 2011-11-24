@@ -14,7 +14,7 @@ The template idea from HTML-TEMPLATE written by Edi Weitz.
 
 ## Usage
 
-For quick start, please check tbw/examples/adder.clj
+For quick start, please check tbw/examples/adder.clj (https://github.com/defstruct/tbw/blob/master/examples/adder.clj)
 
 ### tbw Dictionary
 
