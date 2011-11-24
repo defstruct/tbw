@@ -185,10 +185,11 @@
                             stack
                             (conj stack (fn [_]
                                           string)))]
+
+          ;; Final stack must be functions only
           (validate-final-tmpl-stack final-stack)
 
           (fn [env]
-            ;; Final stack must be functions only
             (apply str ((apply juxt final-stack) env))))))))
 
 (defn- make-include-function [file-path prev-string]
@@ -214,7 +215,7 @@
 ;;;
 ;;; To highlight their use of create-tmpl-printer (through make-include-function),
 ;;; list their code later instead of 'declaring'.
-;;; 
+;;;
 
 (defmethod maybe-reduce-stack "TMPL_INCLUDE" [stack]
   (let [include-tag (peek stack)]
