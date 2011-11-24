@@ -36,13 +36,17 @@
 ;;;; Code:
 
 (ns tbw.examples.adder
-  (:use [tbw.core :only [def-tbw form-params* tbw-handle-request]]
+  (:use [tbw.core :only [def-tbw form-params* tbw-handle-request set-headers! set-status!]]
         [tbw.specials]
         [ring.adapter.jetty :only [run-jetty]]))
 
 (defn- get-adder-env []
   ;; FIXME: doc - server-port*, server-name*, remote-addr*, uri*, query-string*, scheme*, request-method*, content-type*
   ;;              content-length*, character-encoding*, headers*, body*
+  (set-headers! "Cache-Control" "public, max-age=2592000")
+  (set-headers! "Content-Type" "text/html; charset=UTF-8")
+  (set-status! +http-accepted+)
+
   (let [params (form-params*)
         a (get params "a")
         b (get params "b")]
