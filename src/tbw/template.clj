@@ -67,35 +67,18 @@
            (subs string (+ tmpl-tag-end end-marker-length))]
           (error "No valid tag definition found." ))))))
 
-(defn- parse-tmpl-tag [string]
+(defn- parse-tmpl-tag "Parse one template tag and return hash map and the rest of the string"
+  [string]
   (when-let [[tag-element attribute prev-string next-string] (get-one-tmpl-tag-element string)]
     [{:tag tag-element :attr (if (empty? attribute) nil attribute) :prev-string prev-string} next-string]))
 
+;;;
+;;; maybe-reduce-stack method and aux functions
+;;;
 (defn- tmpl-tag-dispatcher [stack]
   (:tag (peek stack)))
 
 (defmulti maybe-reduce-stack tmpl-tag-dispatcher)
-
-(defn- validate-final-tmpl-stack [stack]
-  (doseq [maybe-map stack]
-    (when (map? maybe-map)
-      (error "Non closing open tag " (:tag maybe-map) " after " (:prev-string maybe-map)))))
-
-(defn create-tmpl-printer [string]
-  (loop [string string stack []]
-    (let [[tag-map next-string] (parse-tmpl-tag string)]
-      (if tag-map
-        ;; tag-map {:tag "TMPL_IF" :prev-string "blah" :attr :foo}
-        (recur next-string (maybe-reduce-stack (conj stack tag-map)))
-        (let [final-stack (if (empty? string)
-                            stack
-                            (conj stack (fn [_]
-                                          string)))]
-          (validate-final-tmpl-stack final-stack)
-
-          (fn [env]
-            ;; Final stack must be functions only
-            (apply str ((apply juxt final-stack) env))))))))
 
 (defmacro with-reducing-tmpl-stack [[front-stack back-stack tag-map open-tags close-tag] stack body]
   `(loop [~front-stack (pop ~stack) ~back-stack `(~(fn [~'_]
@@ -183,6 +166,31 @@
                       (recur (dec i) (concat acc (body-fn env)))))
                   (:prev-string tag-map))))))))
 
+;;;
+;;; create-tmpl-printer and aux functions
+;;;
+
+(defn- validate-final-tmpl-stack [stack]
+  (doseq [maybe-map stack]
+    (when (map? maybe-map)
+      (error "Non closing open tag " (:tag maybe-map) " after " (:prev-string maybe-map)))))
+
+(defn create-tmpl-printer [string]
+  (loop [string string stack []]
+    (let [[tag-map next-string] (parse-tmpl-tag string)]
+      (if tag-map
+        ;; tag-map {:tag "TMPL_IF" :prev-string "blah" :attr :foo}
+        (recur next-string (maybe-reduce-stack (conj stack tag-map)))
+        (let [final-stack (if (empty? string)
+                            stack
+                            (conj stack (fn [_]
+                                          string)))]
+          (validate-final-tmpl-stack final-stack)
+
+          (fn [env]
+            ;; Final stack must be functions only
+            (apply str ((apply juxt final-stack) env))))))))
+
 (defn- make-include-function [file-path prev-string]
   ;; FIXME: refactor! See make-apply-env-fn
   (with-existing-file [file file-path :cwd true]
@@ -200,6 +208,13 @@
             (swap! tmpl-printer-timestamp (fn [_] (.lastModified file))))
           (str prev-string
                (@tmpl-printer env)))))))
+
+;;;
+;;; Extra maybe-reduce-stack for TMPL_INCLUDE and TMPL_CALL
+;;;
+;;; To highlight their use of create-tmpl-printer (through make-include-function),
+;;; list their code later instead of 'declaring'.
+;;; 
 
 (defmethod maybe-reduce-stack "TMPL_INCLUDE" [stack]
   (let [include-tag (peek stack)]
