@@ -51,6 +51,9 @@
 (def ^{:dynamic true} *request*)
 (def ^{:dynamic true} *response*)
 
+;;;
+;;; Request readers
+;;;
 ;; From ring-devel/src/ring/handler/dump.clj, and same as
 ;; keywords in build-request-map function (ring-servlet/src/ring/util/servlet.clj) ?
 (def request-keys [:server-port :server-name :remote-addr :uri :query-string :scheme :request-method
@@ -74,6 +77,72 @@
 ;; Populate request readers
 (define-request-readers)
 
+;;;
+;;; Request Dispatcher/Handlers
+;;;
+(defn- handle-static-file [^File file]
+  (let [last-modified (rfc-1123-date (Date. (.lastModified file)))]
+    (if (= (get (headers*) "if-modified-since") last-modified)
+      {:status +http-not-modified+}
+      {:body file
+       :headers {"last-modified" (rfc-1123-date (Date. last-modified))}})))
+
+(defn- create-static-file-dispatcher [prefix file]
+  (let [regex (Pattern/compile (str prefix "$"))]
+    #(when (re-find regex (uri*))
+       (fn [] (handle-static-file file)))))
+
+(defn- create-folder-dispatcher [prefix file]
+  (let [regex   (Pattern/compile (str "^" prefix))]
+    #(let [uri (uri*)
+           matcher (.matcher regex uri)]
+       (when (.find matcher)
+         (fn [] (handle-static-file (File. file (subs uri (.end matcher)))))))))
+
+(defn make-resource-dispatchers [resource-dispatchers]
+  (vec (map (fn [[prefix {type :type  path :path}]]
+              (with-existing-file [file path :cwd true]
+                (let [file? (= type :file)]
+                  (assert (=  (.isFile file) file?))
+                  (if file?
+                    (create-static-file-dispatcher prefix file)
+                    (create-folder-dispatcher prefix file)))))
+            resource-dispatchers)))
+
+(defn- default-handler []
+  ;; FIXME: logging
+  {:status +http-bad-request+
+   :headers {"Content-Type" "text/html; charset=utf-8"}
+   :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
+
+(defn set-http-response-headers! "Setter for HTTP response headers" [key val]
+  (set! *response*
+        (assoc *response* :headers (assoc (:headers *response*) key val))))
+
+(defn set-http-response-status! "Setter for HTTP status return code" [code]
+  (set! *response* (assoc *response* :status code)))
+
+(defn- run-html-dispatcher [html-dispatcher site]
+  (binding [*response* {:status +http-ok+ :headers {}}]
+    (let [body (html-dispatcher)]
+      (assoc *response* :body body))))
+
+(defn- call-request-handlers [site script-name]
+  (if-let [html-dispatcher (get (:script->html-template site) script-name)]
+    (run-html-dispatcher html-dispatcher site)
+    (loop [[dispatcher & rest] (:site-dispatchers site)]
+      (if dispatcher
+        (if-let [handler (dispatcher)]
+          (if-let [response (ignore-errors (handler))]
+            response
+            (recur rest))
+          (recur rest))
+        (default-handler)))))
+
+
+;;;
+;;; Site object, etc
+;;;
 ;; Global mapping used in handle-request
 (def tbw-sites (ref []))
 
@@ -95,25 +164,6 @@
 
     new-site))
 
-(defn- handle-static-file [^File file]
-  (let [last-modified (rfc-1123-date (Date. (.lastModified file)))]
-    (if (= (get (headers*) "if-modified-since") last-modified)
-      {:status +http-not-modified+}
-      {:body file
-       :headers {"last-modified" (rfc-1123-date (Date. last-modified))}})))
-
-(defn- create-static-file-dispatcher [prefix file]
-  (let [regex (Pattern/compile (str prefix "$"))]
-    #(when (re-find regex (uri*))
-       (fn [] (handle-static-file file)))))
-
-(defn- create-folder-dispatcher [prefix file]
-  (let [regex   (Pattern/compile (str "^" prefix))]
-    #(let [uri (uri*)
-           matcher (.matcher regex uri)]
-       (when (.find matcher)
-         (fn [] (handle-static-file (File. file (subs uri (.end matcher)))))))))
-
 (defn update-tbw-sites! [site-obj]
   (let [new-uri-prefix (:uri-prefix site-obj)
         [existing-pos] (take 1 (positions #(= (:uri-prefix %) new-uri-prefix) @tbw-sites))]
@@ -124,16 +174,9 @@
       (dosync
        (alter tbw-sites conj site-obj)))))
 
-(defn make-resource-dispatchers [resource-dispatchers]
-  (vec (map (fn [[prefix {type :type  path :path}]]
-              (with-existing-file [file path :cwd true]
-                (let [file? (= type :file)]
-                  (assert (=  (.isFile file) file?))
-                  (if file?
-                    (create-static-file-dispatcher prefix file)
-                    (create-folder-dispatcher prefix file)))))
-            resource-dispatchers)))
-
+;;;
+;;; def-tbw macro and aux functions
+;;;
 (defn- canonicalize-resource-dispatchers "Build sorted and prefixed resource dispatcher defs."
   [prefix resource-dispatchers]
   (loop [defs resource-dispatchers file-defs [] folder-defs []]
@@ -144,20 +187,6 @@
             :else (error "Unknown resource type: " (:type val))))))
 
 ;; FIXME: is this really necessary? Make it simple
-(defn- make-apply-env-fn [env-fn html-file]
-  (letfn [(%create-tmpl-printer []
-            (let [file-channel (.getChannel (FileInputStream. html-file))]
-              (create-tmpl-printer (.. (Charset/forName "UTF-8")
-                                       newDecoder
-                                       (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
-                                       toString))))]
-    (binding [*tmpl-printer-timestamp* (.lastModified html-file)
-              *tmpl-printer* (%create-tmpl-printer)]
-      (fn []
-        (when-not (= (.lastModified html-file) *tmpl-printer-timestamp*)
-          (set! *tmpl-printer* (%create-tmpl-printer)))
-        (*tmpl-printer* (env-fn))))))
-
 (defn- make-apply-env-fn [env-fn html-file]
   (letfn [(%create-tmpl-printer []
             (let [file-channel (.getChannel (FileInputStream. html-file))]
@@ -211,37 +240,9 @@
                                          :uri-prefix ~uri-prefix
                                          :default-html-page ~default-html-page
                                          :site-dispatchers (make-resource-dispatchers ~resource-dispatchers))))))
-
-(defn- default-handler []
-  ;; FIXME: logging
-  {:status +http-bad-request+
-   :headers {"Content-Type" "text/html; charset=utf-8"}
-   :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
-
-(defn set-http-response-headers! "Setter for HTTP response" [key val]
-  (set! *response*
-        (assoc *response* :headers (assoc (:headers *response*) key val))))
-
-(defn set-http-response-status! "Setter for HTTP status return code" [code]
-  (set! *response* (assoc *response* :status code)))
-
-(defn- run-html-dispatcher [html-dispatcher site]
-  (binding [*response* {:status +http-ok+ :headers {}}]
-    (let [body (html-dispatcher)]
-      (assoc *response* :body body))))
-
-(defn- call-request-handlers [site script-name]
-  (if-let [html-dispatcher (get (:script->html-template site) script-name)]
-    (run-html-dispatcher html-dispatcher site)
-    (loop [[dispatcher & rest] (:site-dispatchers site)]
-      (if dispatcher
-        (if-let [handler (dispatcher)]
-          (if-let [response (ignore-errors (handler))]
-            response
-            (recur rest))
-          (recur rest))
-        (default-handler)))))
-
+;;;
+;;; The toplevel request handler for 'real' web server
+;;;
 (def tbw-handle-request
   (wrap-params (fn [request]
                  (binding [*request* request]
