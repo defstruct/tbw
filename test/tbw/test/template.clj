@@ -128,18 +128,22 @@
       (is (= (p {:three "3"}) "The fast brown fox")))))
 
 (deftest tmpl-include
-  (let [p (create-tmpl-printer "Fox <!-- TMPL_INCLUDE /tmp/foo --> jumps over the lazy dog")]
-    (testing "TMPL_INCLUDE FIXME - TMPL_INCLUDE not implemented yet"
-      (is (= (p {}) "Fox FIXME jumps over the lazy dog"))
-      (is false))))
+  (let [p (create-tmpl-printer "Fox<!-- TMPL_include examples/html/main.html --> jumps over the lazy dog")]
+    (testing "TMPL_INCLUDE with example HTML file"
+      (is (= (p {}) "Fox<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n<html>\n  <head>\n    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n    <title>adder</title>\n  </head>\n\n  <body>\n    \n    \n  </body>\n</html>\n jumps over the lazy dog"))
+      (is (= (p {:input  true :show-invalid-message true :a 111 :b 222 })
+             "Fox<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n<html>\n  <head>\n    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n    <title>adder</title>\n  </head>\n\n  <body>\n    \n    <h2>add two numbers</h2>\n    <form method='post'>\n      \n      <p>Those are not both numbers!</p>\n      \n      <input type='text' name='a' value='111'></input>\n      <span> + </span>\n      <input type='text' name='b' value='222'></input>\n      <br>\n      <input type='submit' value='add'></input>\n    </form>\n    \n    \n  </body>\n</html>\n jumps over the lazy dog")))))
 
 (deftest tmpl-call
   (let [p (create-tmpl-printer "Fox<!-- TMPL_CALL parts --> jumps over the lazy dog")]
     (testing "TMPL-CALL without any parts var"
       (is (= (p {}) "Fox jumps over the lazy dog")))
-    (testing "TMPL-CALL FIXME - TMPL-CALL not implemented yet"
-      (is (= (p {:parts ["/a/b/c" {:foo 2 :bar 3}]}) "FoxFIXME jumps over the lazy dog"))
-      (is false))))
+    (testing "TMPL-CALL with example HTML file 1"
+      (is (= (p {:parts [["examples/html/main.html" {}]]})
+             "Fox<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n<html>\n  <head>\n    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n    <title>adder</title>\n  </head>\n\n  <body>\n    \n    \n  </body>\n</html>\n jumps over the lazy dog")))
+    (testing "TMPL-CALL with example HTML file 2"
+      (is (= (p {:parts [["examples/html/main.html" {:input  true :show-invalid-message true :a 111 :b 222 }]]})
+             "Fox<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n<html>\n  <head>\n    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n    <title>adder</title>\n  </head>\n\n  <body>\n    \n    <h2>add two numbers</h2>\n    <form method='post'>\n      \n      <p>Those are not both numbers!</p>\n      \n      <input type='text' name='a' value='111'></input>\n      <span> + </span>\n      <input type='text' name='b' value='222'></input>\n      <br>\n      <input type='submit' value='add'></input>\n    </form>\n    \n    \n  </body>\n</html>\n jumps over the lazy dog")))))
 
 (deftest nested-tmpl
   (let [p (create-tmpl-printer "<!-- TMPL_IF input --> TMPL_IF input start <!-- TMPL_UNLESS valid-numbers --> TMPL_UNLESS valid-numbers start <!-- /TMPL_UNLESS --> TMPL_UNLESS valid-numbers end <!-- TMPL_IF a -->TMPL_IF a start '<!-- TMPL_VAR a -->' 'TMPL_VAR a' <!-- /TMPL_IF --> TMPL_IF a end <!-- TMPL_IF b --> TMPL_IF b start '<!-- TMPL_VAR b -->' 'TMPL_VAR b' <!-- /TMPL_IF --> TMPL_IF b end <!-- /TMPL_IF --> TMPL_IF input end <!-- TMPL_IF output --> TMPL_IF output start<!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --> a + b = sum <!-- /TMPL_IF --> TMPL_IF output end")]
