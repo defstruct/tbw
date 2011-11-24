@@ -198,9 +198,17 @@
    :headers {"Content-Type" "text/html; charset=utf-8"}
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
+(defn set-headers! [key val]
+  (set! *response*
+        (assoc *response* :headers (assoc (:headers *response*) key val))))
+
+(defn set-status! [code]
+  (set! *response* (assoc *response* :status code)))
+
 (defn- run-html-dispatcher [html-dispatcher site]
-  (binding [*response* {:status +http-ok+ :headers ""}]
-    (assoc *response* :body (html-dispatcher))))
+  (binding [*response* {:status +http-ok+ :headers {}}]
+    (let [body (html-dispatcher)]
+      (assoc *response* :body body))))
 
 (defn- call-request-handlers [site script-name]
   (if-let [html-dispatcher (get (:script->html-template site) script-name)]
