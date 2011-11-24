@@ -61,12 +61,13 @@
 
 (def-tbw adder [:uri-prefix "/adder"]
   ;; FIXME: resource definitions may need extra response headers
-  :resource-dispatchers {"/css/"        {:type :folder :path "css"}
-                         "/img/"        {:type :folder :path "img"}
-                         "/js/"         {:type :folder :path "js"}
-                         "/yui/"        {:type :folder :path "yui"}
-                         "/favicon.ico" {:type :file   :path "img/favicon.ico"}
-                         "/robots.txt"  {:type :file   :path "etc/robots.txt"}
+  :resource-dispatchers {"/css/"        {:type :folder :path "examples/css"}
+                         ;;"/img/"        {:type :folder :path "img"}
+                         ;;"/js/"         {:type :folder :path "js"}
+                         ;;"/yui/"        {:type :folder :path "yui"}
+                         ;;"/favicon.ico" {:type :file   :path "img/favicon.ico"}
+                         ;; robots.txt is only for a file example
+                         "/robots.txt"  {:type :file   :path "examples/etc/robots.txt"}
                          }
   :html-folder "examples/html"
   :html-page->env-mappers {"main.html" get-adder-env}
