@@ -41,8 +41,6 @@
         [ring.adapter.jetty :only [run-jetty]]))
 
 (defn- get-adder-env []
-  ;; FIXME: doc - server-port*, server-name*, remote-addr*, uri*, query-string*, scheme*, request-method*, content-type*
-  ;;              content-length*, character-encoding*, headers*, body*
   (set-http-response-headers! "Cache-Control" "public, max-age=2592000")
   (set-http-response-headers! "Content-Type" "text/html; charset=UTF-8")
   (set-http-response-status! +http-accepted+)
