@@ -35,7 +35,7 @@
 ;;
 ;;;; Code:
 
-(defproject tbw "0.1.0-RC1-SNAPSHOT"
+(defproject tbw "0.1.0-RC2"
   :description "tbw - template based web"
   :url "https://github.com/defstruct/tbw"
   :dependencies [[org.clojure/clojure "1.3.0"]
