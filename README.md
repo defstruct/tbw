@@ -10,11 +10,37 @@ Define a site using declarative style.
 Web pages of the same website usually has the same style and to achieve this just use template html files.
 A website is defined by a unique uri prefix.
 
-The template idea from HTML-TEMPLATE written by Edi Weitz.
+The template idea from HTML-TEMPLATE written by Edi Weitz(http://weitz.de/html-template/)
 
 ## Usage
 
 For quick start, please check tbw/examples/adder.clj (https://github.com/defstruct/tbw/blob/master/examples/adder.clj)
+Also test cases could be helpful: https://github.com/defstruct/tbw/blob/master/test/tbw/test/template.clj
+
+### Template Tags
+
+There are seven tags: TMPL_VAR, TMPL_IF, TMPL_UNLESS, TMPL_LOOP, TMPL_REPEAT, TMPL_INCLUDE, and TMPL_CALL.
+
+- <!-- TMPL_VAR attr -->
+  The tag will be replace by value of :attr in {:attr <value> ...}
+
+- <!-- TMPL_IF attr -->then[<!-- TMPL_ELSE -->else]<-- /TMPL_IF -->
+  If :attr is true, render 'then' otherwise render 'else' (optional TMPL_ELSE exists) or render nothing (TMPL_ELSE does not exist)
+
+- <!-- TMPL_UNLESS attr -->then[<!-- TMPL_ELSE -->else]<-- /TMPL_UNLESS -->
+  If :attr is false, render 'then' otherwise render 'else' (optional TMPL_ELSE exists) or render nothing (TMPL_ELSE does not exist)
+
+- <!-- TMPL_LOOP attr -->body<!-- /TMPL_LOOP -->
+  The value of :attr is a sequence of hash-map and will be used in 'body'.
+
+- <!-- TMPL_REPEAT attr -->body<!-- /TMPL_REPEAT -->
+  The value of :attr must be an integer to repeat 'body' number of times. Otherwise ignore the 'body'.
+
+- <!-- TMPL_INCLUDE attr -->
+  The 'attr' is path to a valid file. Otherwise raise an error in compile time.
+
+- <!-- TMPL_CALL attr -->
+  The value of :attr is a sequence of [file var-map]. Each file will be included like TMPL_INCLUDE and apply var-map to its content.
 
 ### tbw Dictionary
 
