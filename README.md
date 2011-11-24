@@ -7,14 +7,51 @@ This is my first Clojure project. Any suggestion will be welcomed.
 
 ## Idea
 Define a site using declarative style.
-Web pages of the same website usually has the same style and to acheive this just use template html files.
+Web pages of the same website usually has the same style and to achieve this just use template html files.
 A website is defined by a unique uri prefix.
 
 The template idea from HTML-TEMPLATE written by Edi Weitz.
 
 ## Usage
 
-Pleasse check tbw/examples/adder.clj
+For quick start, please check tbw/examples/adder.clj
+
+### tbw Dictionary
+
++http-*+
+ - HTTP response return codes. See specials.clj
+
++http-code->message-map+
+ - Hash map for HTTP response return code -> message
+
+server-port*, server-name*, remote-addr*, uri*, query-string*, scheme*, request-method*,
+content-type*, content-length*, character-encoding*, headers*, body*, :query-params*, form-params*
+ - Request readers derived from 'ring' request-map keys. They can accept an optional request-map which is *request* usually.
+
+def-tbw site-name [& {:keys [uri-prefix]}]
+                   & {:keys [resource-dispatchers html-folder html-page->env-mappers default-html-page]}
+ - Constructor for a tbw site.
+   uri-prefix will be used to determine the site handler.
+   resource-dispatchers are definitions for static files like CSS files, JS files, Images, etc.
+   html-folder is the folder in which all the html files of html-page->env-mappers exist.
+   html-page->env-mappers is a pair of HTML file and a hash map returning function.
+   default-html-page is the default page to render when there is no script in URI.
+
+set-http-response-headers! header-key header-value
+ - Setter for headers of the current HTTP response, *response*
+
+set-http-response-status! http-return-code
+ - Setter for HTTP status return code of the current HTTP response, *response*
+
+tbw-handle-request
+ - tbw handler. Need to be passed to the underlying webserver.
+   For example:
+   (defonce server (run-jetty tbw-handle-request {:port 4347, :join? false}))
+
+
+## Acknowledgements
+
+Thanks to Edi Weitz for many Common Lisp libraries including HTML-TEMPLATE.
 
 ## License
 
