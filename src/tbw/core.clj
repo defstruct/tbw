@@ -47,7 +47,7 @@
            [java.util Date]
            [java.util.regex Pattern]))
 
-;; Special variable and functions for the request
+;; Special variable and functions for the request and response
 (def ^{:dynamic true} *request*)
 (def ^{:dynamic true} *response*)
 
@@ -81,9 +81,12 @@
 
 (defn make-tbw-site [& {:keys [script->html-template uri-prefix default-html-page site-dispatchers]
                          :or {uri-prefix "/"}}]
-  {:pre [(identity script->html-template) (identity default-html-page) (identity site-dispatchers) (and (= (get uri-prefix 0) \/)
-                                                                       (not (= (get uri-prefix (dec (count uri-prefix)))
-                                                                               \/)))]}
+  {:pre [(identity script->html-template)
+         (identity default-html-page)
+         (identity site-dispatchers)
+         (and (= (get uri-prefix 0) \/)
+              (not (= (get uri-prefix (dec (count uri-prefix)))
+                      \/)))]}
   (let [new-site (TemplateBasedWebSite. script->html-template
                                         uri-prefix
                                         default-html-page
@@ -108,9 +111,7 @@
   (let [regex   (Pattern/compile (str "^" prefix))]
     #(let [uri (uri*)
            matcher (.matcher regex uri)]
-       ;;(println `(:uri ~uri :regex ~regex))
        (when (.find matcher)
-         ;;(println `(:got2 ,(subs uri (.end matcher))))
          (fn [] (handle-static-file (File. file (subs uri (.end matcher)))))))))
 
 (defn update-tbw-sites! [site-obj]
@@ -143,16 +144,40 @@
             :else (error "Unknown resource type: " (:type val))))))
 
 ;; FIXME: is this really necessary? Make it simple
-;;              Need to add/pass encoding info at def-tbw level
 (defn- make-apply-env-fn [env-fn html-file]
-  (let [file-channel (.getChannel (FileInputStream. html-file))]
-    (fn []
-      ;;(println `(~(form-params*) ~(env-fn)))
-      ((create-tmpl-printer (.. (Charset/forName "UTF-8")
-                                newDecoder
-                                (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
-                                toString))
-       (env-fn)))))
+  (letfn [(%create-tmpl-printer []
+            (let [file-channel (.getChannel (FileInputStream. html-file))]
+              (create-tmpl-printer (.. (Charset/forName "UTF-8")
+                                       newDecoder
+                                       (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
+                                       toString))))]
+    (binding [*tmpl-printer-timestamp* (.lastModified html-file)
+              *tmpl-printer* (%create-tmpl-printer)]
+      (fn []
+        (println :printer)
+        (println *tmpl-printer*)
+        (println :printer-timstamp)
+        (println *tmpl-printer*)
+        (when-not (= (.lastModified html-file) *tmpl-printer-timestamp*)
+          (println :foo2)
+          (set! *tmpl-printer* (%create-tmpl-printer)))
+        (println :foo3)
+        (*tmpl-printer* (env-fn))))))
+
+(defn- make-apply-env-fn [env-fn html-file]
+  (letfn [(%create-tmpl-printer []
+            (let [file-channel (.getChannel (FileInputStream. html-file))]
+              (create-tmpl-printer (.. (Charset/forName "UTF-8")
+                                       newDecoder
+                                       (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
+                                       toString))))]
+    (let [tmpl-printer-timestamp (atom (.lastModified html-file))
+          tmpl-printer (atom (%create-tmpl-printer))]
+      (fn []
+        (when-not (= (.lastModified html-file) @tmpl-printer-timestamp)
+          (swap! tmpl-printer (fn [_] (%create-tmpl-printer)))
+          (swap! tmpl-printer-timestamp (fn [_] (.lastModified html-file))))
+        (@tmpl-printer (env-fn))))))
 
 (defn canonicalize-html-dispatchers [uri-prefix html-folder html-page->env-mappers]
   (with-existing-file [html-folder html-folder :cwd true]
@@ -182,6 +207,7 @@
                                                                         ~html-folder
                                                                         ~(apply hash-map
                                                                                 ;; this allows changing env-mappers
+                                                                                ;; without recompiling the site.
                                                                                 (mapcat (fn [[html func]]
                                                                                           [html
                                                                                            `(fn []
@@ -198,11 +224,11 @@
    :headers {"Content-Type" "text/html; charset=utf-8"}
    :body "<html><head><title>tbw</title></head><body><h2>tbw Default Page</h2><p>This is the tbw default page. You're most likely seeing it because the server administrator hasn't set up a custom default page yet.</p></body></html>"})
 
-(defn set-headers! [key val]
+(defn set-http-response-headers! "Setter for HTTP response" [key val]
   (set! *response*
         (assoc *response* :headers (assoc (:headers *response*) key val))))
 
-(defn set-status! [code]
+(defn set-http-response-status! "Setter for HTTP status return code" [code]
   (set! *response* (assoc *response* :status code)))
 
 (defn- run-html-dispatcher [html-dispatcher site]
@@ -214,7 +240,6 @@
   (if-let [html-dispatcher (get (:script->html-template site) script-name)]
     (run-html-dispatcher html-dispatcher site)
     (loop [[dispatcher & rest] (:site-dispatchers site)]
-      ;;    (println `(:call-request-handlers ~dispatcher))
       (if dispatcher
         (if-let [handler (dispatcher)]
           (if-let [response (ignore-errors (handler))]
@@ -226,13 +251,11 @@
 (def tbw-handle-request
   (wrap-params (fn [request]
                  (binding [*request* request]
-                   ;;(println *request*)
                    (let [uri (uri*)
                          uri-prefix (apply subs uri (take 2 (positions #(= % \/) uri)))
                          [site] (take 1 (filter (fn [site-def]
                                                   (= (:uri-prefix site-def) uri-prefix))
                                                 @tbw-sites))]
-                     ;;      (println `(:site ~site :empty? ~(empty? site) :uri-prefix ,uri-prefix))
                      (if (empty? site)
                        ;; call default handler
                        (default-handler)
