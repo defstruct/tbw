@@ -36,16 +36,16 @@
 ;;;; Code:
 
 (ns tbw.examples.adder
-  (:use [tbw.core :only [def-tbw form-params* tbw-handle-request set-headers! set-status!]]
+  (:use [tbw.core :only [def-tbw form-params* tbw-handle-request set-http-response-headers! set-http-response-status!]]
         [tbw.specials]
         [ring.adapter.jetty :only [run-jetty]]))
 
 (defn- get-adder-env []
   ;; FIXME: doc - server-port*, server-name*, remote-addr*, uri*, query-string*, scheme*, request-method*, content-type*
   ;;              content-length*, character-encoding*, headers*, body*
-  (set-headers! "Cache-Control" "public, max-age=2592000")
-  (set-headers! "Content-Type" "text/html; charset=UTF-8")
-  (set-status! +http-accepted+)
+  (set-http-response-headers! "Cache-Control" "public, max-age=2592000")
+  (set-http-response-headers! "Content-Type" "text/html; charset=UTF-8")
+  (set-http-response-status! +http-accepted+)
 
   (let [params (form-params*)
         a (get params "a")
@@ -62,6 +62,7 @@
 
 
 (def-tbw adder [:uri-prefix "/adder"]
+  ;; FIXME: resource definitions may need extra response headers
   :resource-dispatchers {"/css/"        {:type :folder :path "css"}
                          "/img/"        {:type :folder :path "img"}
                          "/js/"         {:type :folder :path "js"}
