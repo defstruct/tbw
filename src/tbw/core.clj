@@ -143,7 +143,7 @@
 ;;;
 ;;; Site object, etc
 ;;;
-;; Global mapping used in handle-request
+;; Global mapping used in tbw-handle-request
 (def tbw-sites (ref []))
 
 (defrecord TemplateBasedWebSite [script->html-template uri-prefix default-html-page site-dispatchers])
