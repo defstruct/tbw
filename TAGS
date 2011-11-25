@@ -1,0 +1,86 @@
+
+test/tbw/test/template.clj,393
+(deftest tmpl-var-printer43,1622
+(deftest tmpl-if-printer50,1941
+(deftest tmpl-if-printer+tmpl-var59,2361
+(deftest tmpl-if-printer+else72,3156
+(deftest tmpl-unless+else81,3638
+(deftest tmpl-unless90,4131
+(deftest tmpl-loop99,4558
+(deftest tmpl-loop+tmpl-var110,5158
+(deftest tmpl-repeat121,5803
+(deftest tmpl-include130,6267
+(deftest tmpl-call137,7683
+(deftest nested-tmpl148,9316
+
+examples/adder.clj,79
+(defn- get-adder-env 43,1837
+(def-tbw adder 62,2530
+(defonce server 78,3373
+
+project.clj,25
+(defproject tbw 38,1515
+
+src/tbw/specials.clj,97
+(defmacro def-http-return-codes 43,1582
+(def-http-return-codes +http-code->message-map+52,1904
+
+src/tbw/util.clj,175
+(defmacro ignore-errors 45,1713
+(defn error 49,1814
+(defn warn 52,1877
+(def rfc-1123-date-format 55,1937
+(defn rfc-1123-date58,2096
+(defmacro with-existing-file 63,2207
+
+src/tbw/template.clj,968
+(def *template-start-marker* 45,1806
+(def *template-end-marker* 46,1843
+(defmacro with-tag-marker-indices 48,1878
+(defn- parse-tmpl-tag 70,2929
+(defn- tmpl-tag-dispatcher 78,3295
+(defmulti maybe-reduce-stack 81,3354
+(defmacro with-reducing-tmpl-stack 83,3405
+(defmethod maybe-reduce-stack 95,4092
+(defmethod maybe-reduce-stack 100,4293
+(defmethod maybe-reduce-stack 103,4351
+(defn- make-if-function107,4566
+(defn %reduce-if-like-tag 117,4858
+(defmethod maybe-reduce-stack 129,5503
+(defmethod maybe-reduce-stack 132,5613
+(defmethod maybe-reduce-stack 135,5675
+(defmethod maybe-reduce-stack 138,5815
+(defmethod maybe-reduce-stack 141,5875
+(defmethod maybe-reduce-stack 153,6529
+(defmethod maybe-reduce-stack 156,6591
+(defn- validate-final-tmpl-stack 173,7246
+(defn create-tmpl-printer 178,7435
+(defn- make-include-function 195,8078
+(defmethod maybe-reduce-stack 220,9250
+(defn- make-call-function 224,9434
+(defmethod maybe-reduce-stack 234,9947
+
+src/tbw/core.clj,838
+(def ^{:dynamic 51,2063
+(def ^{:dynamic 52,2096
+(def request-keys 59,2302
+(defn- request-reader*-form 64,2606
+(defmacro define-request-readers70,2782
+(defn- handle-static-file 83,3187
+(defn- create-static-file-dispatcher 90,3488
+(defn- create-folder-dispatcher 95,3668
+(defn make-resource-dispatchers 102,3940
+(defn- default-handler 112,4392
+(defn set-http-response-headers! 118,4760
+(defn set-http-response-status! 122,4934
+(defn- run-html-dispatcher 125,5064
+(defn- call-request-handlers 130,5244
+(def tbw-sites 147,5760
+(defrecord TemplateBasedWebSite 149,5786
+(defn make-tbw-site 151,5890
+(defn update-tbw-sites! 167,6537
+(defn- canonicalize-resource-dispatchers 180,6984
+(defn- make-apply-env-fn 190,7608
+(defn canonicalize-html-dispatchers 205,8434
+(defmacro def-tbw 221,9269
+(def tbw-handle-request246,11032

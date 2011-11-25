@@ -167,7 +167,7 @@
                   (:prev-string tag-map))))))))
 
 ;;;
-;;; create-tmpl-printer and aux functions
+;;; create-tmpl-evaluator and aux functions
 ;;;
 
 (defn- validate-final-tmpl-stack [stack]
@@ -175,7 +175,7 @@
     (when (map? maybe-map)
       (error "Non closing open tag " (:tag maybe-map) " after " (:prev-string maybe-map)))))
 
-(defn create-tmpl-printer [string]
+(defn create-tmpl-evaluator [string]
   (loop [string string stack []]
     (let [[tag-map next-string] (parse-tmpl-tag string)]
       (if tag-map
@@ -195,25 +195,25 @@
 (defn- make-include-function [file-path prev-string]
   ;; FIXME: refactor! See make-apply-env-fn
   (with-existing-file [file file-path :cwd true]
-    (letfn [(%create-tmpl-printer []
+    (letfn [(%create-tmpl-evaluator []
               (let [file-channel (.getChannel (FileInputStream. file))]
-                (create-tmpl-printer (.. (Charset/forName "UTF-8")
+                (create-tmpl-evaluator (.. (Charset/forName "UTF-8")
                                          newDecoder
                                          (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
                                          toString))))]
-      (let [tmpl-printer-timestamp (atom (.lastModified file))
-            tmpl-printer (atom (%create-tmpl-printer))]
+      (let [tmpl-evaluator-timestamp (atom (.lastModified file))
+            tmpl-evaluator (atom (%create-tmpl-evaluator))]
         (fn [env]
-          (when-not (= (.lastModified file) @tmpl-printer-timestamp)
-            (swap! tmpl-printer (fn [_] (%create-tmpl-printer)))
-            (swap! tmpl-printer-timestamp (fn [_] (.lastModified file))))
+          (when-not (= (.lastModified file) @tmpl-evaluator-timestamp)
+            (swap! tmpl-evaluator (fn [_] (%create-tmpl-evaluator)))
+            (swap! tmpl-evaluator-timestamp (fn [_] (.lastModified file))))
           (str prev-string
-               (@tmpl-printer env)))))))
+               (@tmpl-evaluator env)))))))
 
 ;;;
 ;;; Extra maybe-reduce-stack for TMPL_INCLUDE and TMPL_CALL
 ;;;
-;;; To highlight their use of create-tmpl-printer (through make-include-function),
+;;; To highlight their use of create-tmpl-evaluator (through make-include-function),
 ;;; list their code later instead of 'declaring'.
 ;;;
 

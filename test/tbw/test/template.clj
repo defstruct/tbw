@@ -41,14 +41,14 @@
         [tbw.template]))
 
 (deftest tmpl-var-printer
-  (let [p (create-tmpl-printer "<p class='fancy'><!-- TMPL_VAR text --></p>")]
+  (let [p (create-tmpl-evaluator "<p class='fancy'><!-- TMPL_VAR text --></p>")]
     (testing "TMPL_VAR printer with empty env"
       (is (= (p {}) "<p class='fancy'></p>")))
     (testing "TMPL_VAR printer with matching env"
       (assert (= (p {:text "Foo"}) "<p class='fancy'>Foo</p>")))))
 
 (deftest tmpl-if-printer
-  (let [p (create-tmpl-printer "The <!-- TMPL_IF fast -->quick <!-- /TMPL_IF -->brown fox")]
+  (let [p (create-tmpl-evaluator "The <!-- TMPL_IF fast -->quick <!-- /TMPL_IF -->brown fox")]
     (testing "TMPL_IF printer with empty env"
       (is (= (p {}) "The brown fox")))
     (testing "TMPL_IF printer with true then branch"
@@ -57,7 +57,7 @@
       (is (= (p {:fast false}) "The brown fox")))))
 
 (deftest tmpl-if-printer+tmpl-var
-  (let [p (create-tmpl-printer "The <!-- TMPL_IF fast --><!--TMPL_VAR speed--><!-- /TMPL_IF -->brown fox")]
+  (let [p (create-tmpl-evaluator "The <!-- TMPL_IF fast --><!--TMPL_VAR speed--><!-- /TMPL_IF -->brown fox")]
     (testing "TMPL_IF+TMPL_VAR printer with empty env"
       (is (= (p {}) "The brown fox")))
     (testing "TMPL_IF+TMPL_VAR printer with true then branch without TMPL_VAR"
@@ -70,7 +70,7 @@
       (is (= (p {:fast false :speed "mach 10 "}) "The brown fox")))))
 
 (deftest tmpl-if-printer+else
-  (let [p (create-tmpl-printer "The <!-- TMPL_IF fast -->quick<!-- TMPL_ELSE -->slow<!-- /TMPL_IF --> brown fox")]
+  (let [p (create-tmpl-evaluator "The <!-- TMPL_IF fast -->quick<!-- TMPL_ELSE -->slow<!-- /TMPL_IF --> brown fox")]
     (testing "TMPL_IF+TMPL_ELSE printer with empty env"
         (is (= (p {}) "The slow brown fox")))
     (testing "TMPL_IF+TMPL_ELSE printer with else branch"
@@ -79,7 +79,7 @@
         (is (= (p {:fast true}) "The quick brown fox")))))
 
 (deftest tmpl-unless+else
-  (let [p (create-tmpl-printer "The <!-- TMPL_UNLESS slow -->quick<!-- TMPL_ELSE -->slow<!-- /TMPL_UNLESS --> brown fox")]
+  (let [p (create-tmpl-evaluator "The <!-- TMPL_UNLESS slow -->quick<!-- TMPL_ELSE -->slow<!-- /TMPL_UNLESS --> brown fox")]
     (testing "TMPL_UNLESS+TMPL_ELSE printer with empty env"
       (is (= (p {}) "The quick brown fox")))
     (testing "TMPL_UNLESS+TMPL_ELSE printer with then branch"
@@ -88,7 +88,7 @@
       (is (= (p {:slow true}) "The slow brown fox")))))
 
 (deftest tmpl-unless
-  (let [p (create-tmpl-printer "The <!-- TMPL_UNLESS slow -->quick<!-- /TMPL_UNLESS --> brown fox")]
+  (let [p (create-tmpl-evaluator "The <!-- TMPL_UNLESS slow -->quick<!-- /TMPL_UNLESS --> brown fox")]
     (testing "TMPL_UNLESS printer with empty env"
       (is (= (p {}) "The quick brown fox")))
     (testing "TMPL_UNLESS printer with false var"
@@ -97,7 +97,7 @@
       (is (= (p {:slow true}) "The  brown fox")))))
 
 (deftest tmpl-loop
-  (let [p (create-tmpl-printer "<!-- TMPL_LOOP foo -->[<!-- TMPL_VAR bar -->,<!-- TMPL_VAR baz -->]<!-- /TMPL_LOOP -->")]
+  (let [p (create-tmpl-evaluator "<!-- TMPL_LOOP foo -->[<!-- TMPL_VAR bar -->,<!-- TMPL_VAR baz -->]<!-- /TMPL_LOOP -->")]
     (testing "TMPL_LOOP printer with empty env"
       (is (= (p {}) "")))
     (testing "TMPL_LOOP printer with missing inner var"
@@ -108,7 +108,7 @@
       (is (= (p {:baz 3 :foo [{:bar 0} {:bar 2}]}) "[0,3][2,3]")))))
 
 (deftest tmpl-loop+tmpl-var
-  (let [p (create-tmpl-printer "<!-- TMPL_LOOP foo -->[<!-- TMPL_VAR bar -->,<!-- TMPL_VAR baz -->]<!-- /TMPL_LOOP -->")]
+  (let [p (create-tmpl-evaluator "<!-- TMPL_LOOP foo -->[<!-- TMPL_VAR bar -->,<!-- TMPL_VAR baz -->]<!-- /TMPL_LOOP -->")]
     (testing "TMPL_LOOP+TMPL_VAR printer with empty env"
       (is (= (p {}) "")))
     (testing "TMPL_LOOP+TMPL_VAR printer with missing inner var"
@@ -119,7 +119,7 @@
       (is (= (p {:baz 3 :foo [{:bar 0} {:bar 2}]}) "[0,3][2,3]")))))
 
 (deftest tmpl-repeat
-  (let [p (create-tmpl-printer "The <!-- TMPL_REPEAT three -->very <!-- /TMPL_REPEAT -->fast brown fox")]
+  (let [p (create-tmpl-evaluator "The <!-- TMPL_REPEAT three -->very <!-- /TMPL_REPEAT -->fast brown fox")]
     (testing "TMPL_REPEAT printer with empty env"
       (is (= (p {}) "The fast brown fox")))
     (testing "TMPL_REPEAT printer with proper number var"
@@ -128,14 +128,14 @@
       (is (= (p {:three "3"}) "The fast brown fox")))))
 
 (deftest tmpl-include
-  (let [p (create-tmpl-printer "Fox<!-- TMPL_include examples/html/main.html --> jumps over the lazy dog")]
+  (let [p (create-tmpl-evaluator "Fox<!-- TMPL_include examples/html/main.html --> jumps over the lazy dog")]
     (testing "TMPL_INCLUDE with example HTML file"
       (is (= (p {}) "Fox<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n<html>\n  <head>\n    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/adder/css/adder.css\">\n    <title>adder</title>\n  </head>\n\n  <body>\n    \n    \n  </body>\n</html>\n jumps over the lazy dog"))
       (is (= (p {:input  true :show-invalid-message true :a 111 :b 222 })
              "Fox<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n<html>\n  <head>\n    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/adder/css/adder.css\">\n    <title>adder</title>\n  </head>\n\n  <body>\n    \n    <h2>add two numbers</h2>\n    <form method='post'>\n      \n      <p>Those are not both numbers!</p>\n      \n      <input type='text' name='a' value='111'></input>\n      <span> + </span>\n      <input type='text' name='b' value='222'></input>\n      <br>\n      <input type='submit' value='add'></input>\n    </form>\n    \n    \n  </body>\n</html>\n jumps over the lazy dog")))))
 
 (deftest tmpl-call
-  (let [p (create-tmpl-printer "Fox<!-- TMPL_CALL parts --> jumps over the lazy dog")]
+  (let [p (create-tmpl-evaluator "Fox<!-- TMPL_CALL parts --> jumps over the lazy dog")]
     (testing "TMPL-CALL without any parts var"
       (is (= (p {}) "Fox jumps over the lazy dog")))
     (testing "TMPL-CALL with example HTML file 1"
@@ -146,7 +146,7 @@
              "Fox<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>\n<html>\n  <head>\n    <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/adder/css/adder.css\">\n    <title>adder</title>\n  </head>\n\n  <body>\n    \n    <h2>add two numbers</h2>\n    <form method='post'>\n      \n      <p>Those are not both numbers!</p>\n      \n      <input type='text' name='a' value='111'></input>\n      <span> + </span>\n      <input type='text' name='b' value='222'></input>\n      <br>\n      <input type='submit' value='add'></input>\n    </form>\n    \n    \n  </body>\n</html>\n jumps over the lazy dog")))))
 
 (deftest nested-tmpl
-  (let [p (create-tmpl-printer "<!-- TMPL_IF input --> TMPL_IF input start <!-- TMPL_UNLESS valid-numbers --> TMPL_UNLESS valid-numbers start <!-- /TMPL_UNLESS --> TMPL_UNLESS valid-numbers end <!-- TMPL_IF a -->TMPL_IF a start '<!-- TMPL_VAR a -->' 'TMPL_VAR a' <!-- /TMPL_IF --> TMPL_IF a end <!-- TMPL_IF b --> TMPL_IF b start '<!-- TMPL_VAR b -->' 'TMPL_VAR b' <!-- /TMPL_IF --> TMPL_IF b end <!-- /TMPL_IF --> TMPL_IF input end <!-- TMPL_IF output --> TMPL_IF output start<!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --> a + b = sum <!-- /TMPL_IF --> TMPL_IF output end")]
+  (let [p (create-tmpl-evaluator "<!-- TMPL_IF input --> TMPL_IF input start <!-- TMPL_UNLESS valid-numbers --> TMPL_UNLESS valid-numbers start <!-- /TMPL_UNLESS --> TMPL_UNLESS valid-numbers end <!-- TMPL_IF a -->TMPL_IF a start '<!-- TMPL_VAR a -->' 'TMPL_VAR a' <!-- /TMPL_IF --> TMPL_IF a end <!-- TMPL_IF b --> TMPL_IF b start '<!-- TMPL_VAR b -->' 'TMPL_VAR b' <!-- /TMPL_IF --> TMPL_IF b end <!-- /TMPL_IF --> TMPL_IF input end <!-- TMPL_IF output --> TMPL_IF output start<!-- TMPL_VAR a --> + <!-- TMPL_VAR b --> = <!-- TMPL_VAR sum --> a + b = sum <!-- /TMPL_IF --> TMPL_IF output end")]
     (testing "TMPL-IF with nested TMPL_VAR"
       (is (= (p {}) " TMPL_IF input end  TMPL_IF output end"))
       (is (= (p {:input true}) " TMPL_IF input start  TMPL_UNLESS valid-numbers start  TMPL_UNLESS valid-numbers end  TMPL_IF a end  TMPL_IF b end  TMPL_IF input end  TMPL_IF output end"))

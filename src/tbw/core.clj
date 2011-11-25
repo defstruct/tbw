@@ -39,7 +39,7 @@
   (:use [ring.middleware.params :only [wrap-params]]
         [clojure.contrib.seq :only [positions]]
         [tbw.specials]
-        [tbw.template :only [create-tmpl-printer]]
+        [tbw.template :only [create-tmpl-evaluator]]
         [tbw.util :only [ignore-errors error warn rfc-1123-date with-existing-file]])
   (:import [java.io File FileInputStream]
            [java.nio.channels FileChannel FileChannel$MapMode]
@@ -188,19 +188,19 @@
 
 ;; FIXME: is this really necessary? Make it simple
 (defn- make-apply-env-fn [env-fn html-file]
-  (letfn [(%create-tmpl-printer []
+  (letfn [(%create-tmpl-evaluator []
             (let [file-channel (.getChannel (FileInputStream. html-file))]
-              (create-tmpl-printer (.. (Charset/forName "UTF-8")
+              (create-tmpl-evaluator (.. (Charset/forName "UTF-8")
                                        newDecoder
                                        (decode (.map file-channel FileChannel$MapMode/READ_ONLY 0 (.size file-channel)))
                                        toString))))]
-    (let [tmpl-printer-timestamp (atom (.lastModified html-file))
-          tmpl-printer (atom (%create-tmpl-printer))]
+    (let [tmpl-evaluator-timestamp (atom (.lastModified html-file))
+          tmpl-evaluator (atom (%create-tmpl-evaluator))]
       (fn []
-        (when-not (= (.lastModified html-file) @tmpl-printer-timestamp)
-          (swap! tmpl-printer (fn [_] (%create-tmpl-printer)))
-          (swap! tmpl-printer-timestamp (fn [_] (.lastModified html-file))))
-        (@tmpl-printer (env-fn))))))
+        (when-not (= (.lastModified html-file) @tmpl-evaluator-timestamp)
+          (swap! tmpl-evaluator (fn [_] (%create-tmpl-evaluator)))
+          (swap! tmpl-evaluator-timestamp (fn [_] (.lastModified html-file))))
+        (@tmpl-evaluator (env-fn))))))
 
 (defn canonicalize-html-dispatchers [uri-prefix html-folder html-page->env-mappers]
   (with-existing-file [html-folder html-folder :cwd true]
